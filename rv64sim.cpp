@@ -25,8 +25,8 @@ int main(int argc, char* argv[]) {
     bool cycle_reporting = false;
     bool stage2 = false;
 
-    memory* main_memory;
-    processor* cpu;
+    // memory* main_memory;
+    // processor* cpu;
 
     unsigned long int cpu_instruction_count;
     
@@ -44,21 +44,23 @@ int main(int argc, char* argv[]) {
 	}
     }
 
-    main_memory = new memory (verbose);
-    cpu = new processor (main_memory, verbose, stage2);
+    // main_memory = new memory (verbose);
+    // cpu = new processor (main_memory, verbose, stage2);
+    memory main_memory(verbose);
+    processor cpu(&main_memory, verbose, stage2);
 
-    interpret_commands(main_memory, cpu, verbose);
+    interpret_commands(&main_memory, &cpu, verbose);
 
     // Report final statistics
 
-    cpu_instruction_count = cpu->get_instruction_count();
+    cpu_instruction_count = cpu.get_instruction_count();
     cout << "Instructions executed: " << dec << cpu_instruction_count << endl;
 
     if (cycle_reporting) {
 	// Required for postgraduate Computer Architecture course
 	unsigned long int cpu_cycle_count;
 
-	cpu_cycle_count = cpu->get_cycle_count();
+	cpu_cycle_count = cpu.get_cycle_count();
 
 	cout << "CPU cycle count: " << dec << cpu_cycle_count << endl;
     }

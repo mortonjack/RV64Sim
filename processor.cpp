@@ -16,28 +16,29 @@
 using namespace std;
 
 // Consructor
-processor::processor (memory* main_memory, bool verbose, bool stage2): instruction_count(0) {
-
-	// TODO
-
-}
-
-// TODO
+processor::processor (memory* main_memory, bool verbose, bool stage2): 
+    instruction_count(0), 
+    pc(0), 
+    has_breakpoint(false) {}
 
 // Display PC value
 void processor::show_pc() {
+    cout << pc << endl;
 }
 
 // Set PC to new value
 void processor::set_pc(uint64_t new_pc) {
+    pc = new_pc;
 }
 
 // Display register value
 void processor::show_reg(unsigned int reg_num) {
+    cout << registers[reg_num] << endl;
 }
 
 // Set register to new value
 void processor::set_reg(unsigned int reg_num, uint64_t new_value) {
+    registers[reg_num] = new_value;
 }
 
 // Execute a number of instructions
@@ -46,10 +47,13 @@ void processor::execute(unsigned int num, bool breakpoint_check) {
 
 // Clear breakpoint
 void processor::clear_breakpoint() {
+    has_breakpoint = false;
 }
 
 // Set breakpoint at an address
 void processor::set_breakpoint(uint64_t address) {
+    has_breakpoint = true;
+    breakpoint = address;
 }
 
 // Show privilege level
