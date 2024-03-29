@@ -18,16 +18,13 @@ using namespace std;
 class memory {
 
  private:
-     // Question: Why unordered map? Why vector? Why not a umap<umap>? why not an array?
-     unordered_map<uint64_t, array<uint64_t, 512>> store;
+     unordered_map<uint64_t, array<uint64_t, 256>> store;
      static constexpr uint64_t address_index(uint64_t address) {
-         return (address >> 3) & 0x1FF;
+         return (address >> 3) & 0xFF;
      }
      static constexpr uint64_t address_key(uint64_t address) {
-         return (address >> 3) & (~0x1FF);
+         return (address >> 3) & (~0xFF);
      }
-
-  // TODO: Add private members here
 
   // hints:
   //   // Store implemented as an unordered_map of vectors, each containing 4Kbytes (512 doublewords) of data.
@@ -35,6 +32,12 @@ class memory {
   //
   //   // Check if a page of store is allocated, and allocate if not
   //   void validate (uint64_t address);
+  //
+  // elaboration:
+  //   Using an array instead of a vector means that it is auto-initialised. So if the memory hasn't
+  //   been allocated prior, when we index into the hashmap, the array will be created for us. So
+  //   just by using regular indexing, so long as we are indexing a valid memory address, we don't
+  //   need to deal with validation
 
  public:
 
