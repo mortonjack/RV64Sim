@@ -23,7 +23,7 @@ processor::processor (memory* main_memory, bool verbose, bool stage2):
 
 // Display PC value
 void processor::show_pc() {
-    cout << pc << endl;
+    cout << setw(16) << setfill('0') << hex <<  pc << endl;
 }
 
 // Set PC to new value
