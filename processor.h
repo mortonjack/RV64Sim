@@ -18,6 +18,7 @@ class processor {
  private:
 
   // TODO: Add private members here
+  uint64_t instruction_count;
 
  public:
 

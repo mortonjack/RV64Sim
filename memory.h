@@ -9,7 +9,7 @@
 
 **************************************************************** */
 
-#include <vector>
+#include <array>
 #include <unordered_map>
 #include <cstdint>
 
@@ -19,7 +19,13 @@ class memory {
 
  private:
      // Question: Why unordered map? Why vector? Why not a umap<umap>? why not an array?
-     unordered_map<uint64_t, vector<uint64_t>> store;
+     unordered_map<uint64_t, array<uint64_t, 512>> store;
+     static constexpr uint64_t address_index(uint64_t address) {
+         return (address >> 3) & 0x1FF;
+     }
+     static constexpr uint64_t address_key(uint64_t address) {
+         return (address >> 3) & (~0x1FF);
+     }
 
   // TODO: Add private members here
 

@@ -16,7 +16,7 @@
 using namespace std;
 
 // Consructor
-processor::processor (memory* main_memory, bool verbose, bool stage2) {
+processor::processor (memory* main_memory, bool verbose, bool stage2): instruction_count(0) {
 
 	// TODO
 
@@ -73,9 +73,11 @@ void processor::set_csr(unsigned int csr_num, uint64_t new_value) {
 }
 
 uint64_t processor::get_instruction_count() {
+    return instruction_count;
 }
 
 // Used for Postgraduate assignment. Undergraduate assignment can return 0.
 uint64_t processor::get_cycle_count() {
+    return 0;
 }
 

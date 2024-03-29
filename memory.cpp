@@ -24,16 +24,19 @@ memory::memory(bool verbose) {
 // Read a doubleword of data from a doubleword-aligned address.
 // If the address is not a multiple of 8, it is rounded down to a multiple of 8.
 uint64_t memory::read_doubleword (uint64_t address) {
-    // Round down to multiple of 8
-    address >>= 3;
-    address <<= 3;
+    uint64_t key = address_key(address);
+    size_t index = address_index(address);
+    return store[key][index];
 }
 
 // Write a doubleword of data to a doubleword-aligned address.
 // If the address is not a multiple of 8, it is rounded down to a multiple of 8.
 // The mask contains 1s for bytes to be updated and 0s for bytes that are to be unchanged.
 void memory::write_doubleword (uint64_t address, uint64_t data, uint64_t mask) {
-  // TODO: ...
+    uint64_t value = (read_doubleword(address) & (~mask)) | (data & mask);
+    uint64_t key = address_key(address);
+    size_t index = address_index(address);
+    store[key][index] = value;
 }
 
 // Load a hex image file and provide the start address for execution from the file in start_address.
