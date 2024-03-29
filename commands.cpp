@@ -58,7 +58,7 @@ bool command_match_blank(string& command, unsigned int i) {
 }
 
 
-bool command_match_x(string& command, unsigned int i, bool& data_present, unsigned int& num, uint65_t& data) { 
+bool command_match_x(string& command, unsigned int i, bool& data_present, unsigned int& num, uint64_t& data) { 
   data_present = false;
   if (i == command.length() || command[i] != 'x') return false;
   i++;

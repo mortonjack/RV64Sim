@@ -11,6 +11,7 @@
 #include <iomanip>
 #include <stdlib.h>
 #include <cstdio>
+#include <cstdint>
 
 #include "memory.h"
 using namespace std;
@@ -23,7 +24,9 @@ memory::memory(bool verbose) {
 // Read a doubleword of data from a doubleword-aligned address.
 // If the address is not a multiple of 8, it is rounded down to a multiple of 8.
 uint64_t memory::read_doubleword (uint64_t address) {
-  // TODO: ...
+    // Round down to multiple of 8
+    address >>= 3;
+    address <<= 3;
 }
 
 // Write a doubleword of data to a doubleword-aligned address.

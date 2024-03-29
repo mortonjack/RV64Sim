@@ -11,12 +11,15 @@
 
 #include <vector>
 #include <unordered_map>
+#include <cstdint>
 
 using namespace std;
 
 class memory {
 
  private:
+     // Question: Why unordered map? Why vector? Why not a umap<umap>? why not an array?
+     unordered_map<uint64_t, vector<uint64_t>> store;
 
   // TODO: Add private members here
 

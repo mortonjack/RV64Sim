@@ -1,0 +1,4 @@
+rv64sim.o: rv64sim.cpp memory.h processor.h commands.h
+commands.o: commands.cpp memory.h processor.h commands.h
+memory.o: memory.cpp memory.h
+processor.o: processor.cpp memory.h processor.h
