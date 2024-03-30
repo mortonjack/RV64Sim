@@ -8,7 +8,6 @@
 
 #include <iostream>
 #include <iomanip> 
-#include <stdlib.h>
 
 #include "memory.h"
 #include "processor.h"
