@@ -12,8 +12,6 @@
 #include "memory.h"
 #include <array>
 
-using namespace std;
-
 class processor {
 
  private:
@@ -23,7 +21,7 @@ class processor {
   // We are using C++11 so unfortunately I can't use optional.
   bool has_breakpoint;
   uint64_t breakpoint;
-  array<uint64_t, 32> registers;
+  std::array<uint64_t, 32> registers;
   
   // Raw pointer - this is just a view! This exists for the lifetime of the program!
   // We do not have ownership over this object! Do not free it!

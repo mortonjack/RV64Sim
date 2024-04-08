@@ -10,22 +10,18 @@
 #include <sstream>
 #include <string>
 #include <iomanip>
-#include <stdlib.h>
 #include <ctype.h>
 
 #include "memory.h"
 #include "processor.h"
 #include "commands.h"
 
-using namespace std;
-
-
-void command_skip_optional_whitespace(string& command, unsigned int& i) { 
+void command_skip_optional_whitespace(std::string& command, unsigned int& i) { 
   while (i < command.length() && isspace(command[i])) i++;
 }
 
 
-bool command_skip_required_whitespace(string& command, unsigned int& i) {
+bool command_skip_required_whitespace(std::string& command, unsigned int& i) {
   if (i == command.length() || !isspace(command[i])) return false;
   i++;
   while (i < command.length() && isspace(command[i])) i++;
@@ -33,32 +29,32 @@ bool command_skip_required_whitespace(string& command, unsigned int& i) {
 }
 
 
-bool command_match_decimal_number(string& command, unsigned int& i, unsigned int& num) { 
+bool command_match_decimal_number(std::string& command, unsigned int& i, unsigned int& num) { 
   unsigned int j = i;
   while (j < command.length() && isdigit(command[j])) j++;
   if (j == i) return false;
-  stringstream(command.substr(i, j - i)) >> num;
+  std::stringstream(command.substr(i, j - i)) >> num;
   i = j;
   return true;
 }
 
 
-bool command_match_hex_number(string& command, unsigned int& i, uint64_t& num) { 
+bool command_match_hex_number(std::string& command, unsigned int& i, uint64_t& num) { 
   unsigned int j = i;
   while (j < command.length() && isxdigit(command[j])) j++;
   if (j == i) return false;
-  stringstream(command.substr(i, j - i)) >> hex >> num;
+  std::stringstream(command.substr(i, j - i)) >> std::hex >> num;
   i = j;
   return true;
 }
 
 
-bool command_match_blank(string& command, unsigned int i) {
+bool command_match_blank(std::string& command, unsigned int i) {
   return i == command.length() || command[i] == '#';
 }
 
 
-bool command_match_x(string& command, unsigned int i, bool& data_present, unsigned int& num, uint64_t& data) { 
+bool command_match_x(std::string& command, unsigned int i, bool& data_present, unsigned int& num, uint64_t& data) { 
   data_present = false;
   if (i == command.length() || command[i] != 'x') return false;
   i++;
@@ -75,7 +71,7 @@ bool command_match_x(string& command, unsigned int i, bool& data_present, unsign
 }
 
 
-bool command_match_pc(string& command, unsigned int i, bool& address_present, uint64_t& address) {
+bool command_match_pc(std::string& command, unsigned int i, bool& address_present, uint64_t& address) {
   address_present = false;
   if (i == command.length() || command[i] != 'p') return false;
   i++;
@@ -93,7 +89,7 @@ bool command_match_pc(string& command, unsigned int i, bool& address_present, ui
 }
 
 
-bool command_match_m(string& command, unsigned int i, bool& data_present, uint64_t& address, uint64_t& data) {
+bool command_match_m(std::string& command, unsigned int i, bool& data_present, uint64_t& address, uint64_t& data) {
   data_present = false;
   if (i == command.length() || command[i] != 'm') return false;
   i++;
@@ -111,7 +107,7 @@ bool command_match_m(string& command, unsigned int i, bool& data_present, uint64
 }
 
 
-bool command_match_dot(string& command, unsigned int i, bool& num_present, unsigned int& num) {
+bool command_match_dot(std::string& command, unsigned int i, bool& num_present, unsigned int& num) {
   num_present = false;
   if (i == command.length() || command[i] != '.') return false;
   i++;
@@ -125,7 +121,7 @@ bool command_match_dot(string& command, unsigned int i, bool& num_present, unsig
 }
 
 
-bool command_match_b(string& command, unsigned int i, bool& address_present, uint64_t& address) {
+bool command_match_b(std::string& command, unsigned int i, bool& address_present, uint64_t& address) {
   address_present = false;
   if (i == command.length() || command[i] != 'b') return false;
   i++;
@@ -139,7 +135,7 @@ bool command_match_b(string& command, unsigned int i, bool& address_present, uin
 }
 
 
-bool command_match_l(string& command, unsigned int i, string& filename) {
+bool command_match_l(std::string& command, unsigned int i, std::string& filename) {
   unsigned int j;
   if (i == command.length() || command[i] != 'l') return false;
   i++;
@@ -157,7 +153,7 @@ bool command_match_l(string& command, unsigned int i, string& filename) {
 }
 
 
-bool command_match_prv(string& command, unsigned int i, bool& num_present, unsigned int& num) {
+bool command_match_prv(std::string& command, unsigned int i, bool& num_present, unsigned int& num) {
   num_present = false;
   if (i == command.length() || command[i] != 'p') return false;
   i++;
@@ -177,7 +173,7 @@ bool command_match_prv(string& command, unsigned int i, bool& num_present, unsig
 }
 
 
-bool command_match_csr(string& command, unsigned int i, bool& data_present, uint64_t& address, uint64_t& data) {
+bool command_match_csr(std::string& command, unsigned int i, bool& data_present, uint64_t& address, uint64_t& data) {
   data_present = false;
   if (i == command.length() || command[i] != 'c') return false;
   i++;
@@ -202,16 +198,16 @@ bool command_match_csr(string& command, unsigned int i, bool& data_present, uint
 // Command interpreter function
 void interpret_commands(memory* main_memory, processor* cpu, bool verbose) {
 
-  string command;
+  std::string command;
   unsigned int i;
   bool address_present, data_present, num_present;
   uint64_t address, data;
   unsigned int num;
-  string filename;
+  std::string filename;
 
   while (true) {
-    getline(cin, command);  // Read the next line of input
-    if (!cin) break;        // Exit if end of input file
+    std::getline(std::cin, command);  // Read the next line of input
+    if (!std::cin) break;        // Exit if end of input file
     i = 0;
     command_skip_optional_whitespace(command, i);
     if (command_match_blank(command, i)) {  // Check for blank command
@@ -219,7 +215,7 @@ void interpret_commands(memory* main_memory, processor* cpu, bool verbose) {
     }
     else if (command_match_x(command, i, data_present, num, data)) {  // Check for x command
       if (num > 31) {
-        cout << "Incorrect register number" << endl;
+          std::cout << "Incorrect register number" << std::endl;
       }
       else if (!data_present) {  // No new value
         cpu->show_reg(num);  // so just show register value
@@ -239,7 +235,7 @@ void interpret_commands(memory* main_memory, processor* cpu, bool verbose) {
     else if (command_match_m(command, i, data_present, address, data)) {  // Check for m command
       if (!data_present) {  // No new value, so just show memory word value
 	data = main_memory->read_doubleword(address);
-	cout << setw(16) << setfill('0') << hex << data << endl;
+    std::cout << std::setw(16) << std::setfill('0') << std::hex << data << std::endl;
       }
       else {  // Update memory doubleword
         main_memory->write_doubleword(address, data, 0xffffffffffffffffULL);
@@ -273,12 +269,12 @@ void interpret_commands(memory* main_memory, processor* cpu, bool verbose) {
       } else if (num == 0 || num == 3) {
         cpu->set_prv(num);  // Set the current privilege level
       } else {
-        cout << "Incorrect privilege level" << endl;
+          std::cout << "Incorrect privilege level" << std::endl;
       }
     }
     else if (command_match_csr(command, i, data_present, address, data)) {  // Check for csr command
       if (address > 0xfffU) {
-        cout << "Incorrect CSR number" << endl;
+          std::cout << "Incorrect CSR number" << std::endl;
       }
       else if (!data_present) {  // No new value
         cpu->show_csr(address);  // so just show memory word value
@@ -288,7 +284,7 @@ void interpret_commands(memory* main_memory, processor* cpu, bool verbose) {
       }
     }
     else {
-      cout << "Unrecognized command" << endl;
+        std::cout << "Unrecognized command" << std::endl;
     }
   }
 }

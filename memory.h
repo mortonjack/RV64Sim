@@ -14,12 +14,10 @@
 #include <unordered_map>
 #include <cstdint>
 
-using namespace std;
-
 class memory {
 
  private:
-     unordered_map<uint64_t, array<uint64_t, 256>> store;
+     std::unordered_map<uint64_t, std::array<uint64_t, 256>> store;
      static constexpr uint64_t address_index(uint64_t address) {
          return (address >> 3) & 0xFF;
      }
@@ -56,7 +54,7 @@ class memory {
 
   // Load a hex image file and provide the start address for execution from the file in start_address.
   // Return true if the file was read without error, or false otherwise.
-  bool load_file(string file_name, uint64_t &start_address);
+  bool load_file(std::string file_name, uint64_t &start_address);
 
 };
 

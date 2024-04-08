@@ -8,21 +8,20 @@
 
 #include <iostream>
 #include <iomanip> 
-
 #include "memory.h"
 #include "processor.h"
-
-using namespace std;
 
 // Consructor
 processor::processor (memory* main_memory, bool verbose, bool stage2): 
     instruction_count(0), 
     pc(0), 
-    has_breakpoint(false) {}
+    has_breakpoint(false),
+    registers()
+{}
 
 // Display PC value
 void processor::show_pc() {
-    cout << setw(16) << setfill('0') << hex <<  pc << endl;
+    std::cout << std::setw(16) << std::setfill('0') << std::hex << pc << std::endl;
 }
 
 // Set PC to new value
@@ -32,12 +31,13 @@ void processor::set_pc(uint64_t new_pc) {
 
 // Display register value
 void processor::show_reg(unsigned int reg_num) {
-    cout << registers[reg_num] << endl;
+    std::cout << std::setw(16) << std::setfill('0') << std::hex << registers[reg_num] << std::endl;
 }
 
 // Set register to new value
 void processor::set_reg(unsigned int reg_num, uint64_t new_value) {
     registers[reg_num] = new_value;
+    registers[0] = 0;
 }
 
 // Execute a number of instructions

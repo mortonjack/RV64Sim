@@ -14,7 +14,6 @@
 #include <cstdint>
 
 #include "memory.h"
-using namespace std;
 
 // Constructor
 memory::memory(bool verbose) {
@@ -41,9 +40,9 @@ void memory::write_doubleword (uint64_t address, uint64_t data, uint64_t mask) {
 
 // Load a hex image file and provide the start address for execution from the file in start_address.
 // Return true if the file was read without error, or false otherwise.
-bool memory::load_file(string file_name, uint64_t &start_address) {
-  ifstream input_file(file_name);
-  string input;
+bool memory::load_file(std::string file_name, uint64_t &start_address) {
+  std::ifstream input_file(file_name);
+  std::string input;
   unsigned int line_count = 0;
   unsigned int byte_count = 0;
   char record_start;
@@ -65,7 +64,7 @@ bool memory::load_file(string file_name, uint64_t &start_address) {
       line_count++;
       input_file >> record_start;
       if (record_start != ':') {
-	cout << "Input line " << dec << line_count << " does not start with colon character" << endl;
+          std::cout << "Input line " << std::dec << line_count << " does not start with colon character" << std::endl;
 	return false;
       }
       input_file.get(byte_string, 3);
@@ -127,12 +126,12 @@ bool memory::load_file(string file_name, uint64_t &start_address) {
 	break;
     }
     input_file.close();
-    cout << dec << byte_count << " bytes loaded, start address = "
-	 << setw(16) << setfill('0') << hex << start_address << endl;
+    std::cout << std::dec << byte_count << " bytes loaded, start address = "
+	 << std::setw(16) << std::setfill('0') << std::hex << start_address << std::endl;
     return true;
   }
   else {
-    cout << "Failed to open file" << endl;
+    std::cout << "Failed to open file" << std::endl;
     return false;
   }
 }
