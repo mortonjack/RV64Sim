@@ -16,16 +16,15 @@
 #include "memory.h"
 
 // Constructor
-memory::memory(bool verbose) {
-  // TODO: ...
-}
+memory::memory(bool verbose) : verbose(verbose)
+{}
 
 // Read a doubleword of data from a doubleword-aligned address.
 // If the address is not a multiple of 8, it is rounded down to a multiple of 8.
 uint64_t memory::read_doubleword (uint64_t address) {
     uint64_t key = address_key(address);
     size_t index = address_index(address);
-    return store[key][index];
+    return this->store[key][index];
 }
 
 // Write a doubleword of data to a doubleword-aligned address.
@@ -35,7 +34,7 @@ void memory::write_doubleword (uint64_t address, uint64_t data, uint64_t mask) {
     uint64_t value = (read_doubleword(address) & (~mask)) | (data & mask);
     uint64_t key = address_key(address);
     size_t index = address_index(address);
-    store[key][index] = value;
+    this->store[key][index] = value;
 }
 
 // Load a hex image file and provide the start address for execution from the file in start_address.

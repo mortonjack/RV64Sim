@@ -234,8 +234,8 @@ void interpret_commands(memory* main_memory, processor* cpu, bool verbose) {
     }
     else if (command_match_m(command, i, data_present, address, data)) {  // Check for m command
       if (!data_present) {  // No new value, so just show memory word value
-	data = main_memory->read_doubleword(address);
-    std::cout << std::setw(16) << std::setfill('0') << std::hex << data << std::endl;
+        data = main_memory->read_doubleword(address);
+        std::cout << std::setw(16) << std::setfill('0') << std::hex << data << std::endl;
       }
       else {  // Update memory doubleword
         main_memory->write_doubleword(address, data, 0xffffffffffffffffULL);

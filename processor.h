@@ -16,6 +16,8 @@ class processor {
 
  private:
 
+  bool verbose;
+
   uint64_t instruction_count;
   uint64_t pc;
   // We are using C++11 so unfortunately I can't use optional.
@@ -23,13 +25,11 @@ class processor {
   uint64_t breakpoint;
   std::array<uint64_t, 32> registers;
   
-  // Raw pointer - this is just a view! This exists for the lifetime of the program!
   // We do not have ownership over this object! Do not free it!
-  //
-  // Oh and we do not clean this up in our main function. We are bad programmers :3
-  // Srsly why not just allocate on the stack??
-  // Okay I might clean this up myself....
   memory* main_memory;
+
+  uint32_t fetch();
+  void execute(uint32_t instruction);
 
  public:
 

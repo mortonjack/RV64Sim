@@ -25,6 +25,8 @@ class memory {
          return (address >> 3) & (~0xFF);
      }
 
+     const bool verbose;
+
   // hints:
   //   // Store implemented as an unordered_map of vectors, each containing 4Kbytes (512 doublewords) of data.
   //   unordered_map< uint64_t, vector<uint64_t> > store;  // Initially empty
@@ -36,7 +38,7 @@ class memory {
   //   Using an array instead of a vector means that it is auto-initialised. So if the memory hasn't
   //   been allocated prior, when we index into the hashmap, the array will be created for us. So
   //   just by using regular indexing, so long as we are indexing a valid memory address, we don't
-  //   need to deal with validation
+  //   need to deal with validation. All values are default-initialised to zero.
 
  public:
 
