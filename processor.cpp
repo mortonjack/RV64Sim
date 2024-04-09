@@ -11,21 +11,6 @@
 #include "memory.h"
 #include "processor.h"
 
-enum Opcode : uint8_t {
-    LUI     =   0x37, // 0b0110111, // LUI
-    AUIPC   =   0x17, // 0b0010111, // AUIPIC
-    JAL     =   0x6f, // 0b1101111, // JAL
-    JALR    =   0x67, // 0b1100111, // JALR
-    BRANCH  =   0x63, // 0b1100011, // BEQ, BNE, BLT, BGE, BLTU, BGEU
-    LOAD    =   0x03, // 0b0000011, // LB, LH, LW, LBU, LHU | LWU, LD
-    STORE   =   0x23, // 0b0100011, // SB, SH, SW | SD
-    ARITH_I =   0x13, // 0b0010011, // ADDI, SLTI, SLTIU, XORI, ORI, ANDI, SLLI, SRLI, SRAI | SLLI, SRLI, SRAI
-    ARITH   =   0x33, // 0b0110011, // ADD, SUB, SLL, SLT, SLTU, XOR, SRL, SRA, OR, AND
-    FENCE   =   0x0f, // 0b0001111, // FENCE 
-    E_INSTR =   0x73, // 0b1110011, // ECALL, EBREAK
-    ARITH_W =   0x1b, // 0b0011011  // ADDIW, SLLIW, SRLIW, SRAIW, ADDW, SUBW, SLLW, SRLW, SRAW
-};
-
 constexpr uint64_t upper32(uint64_t doubleword) {
     return 0xFFFFFFFF00000000ULL & doubleword;
 }
@@ -34,15 +19,28 @@ constexpr uint64_t lower32(uint64_t doubleword) {
     return 0xFFFFFFFFULL & doubleword;
 }
 
-constexpr int64_t uimmediate(uint32_t instruction) {
-    // Casting a uint32_t to an int64_t won't sign extend
+constexpr int64_t upper_immediate(uint32_t instruction) {
     return int32_t(instruction & 0xfffff000);
+}
+
+constexpr int64_t immediate_11_0(uint32_t instruction) {
+    return int32_t(instruction & 0xfff00000) >> 20;
 }
 
 // Execute a number of instructions
 void processor::execute(unsigned int num, bool breakpoint_check) {
     breakpoint_check = breakpoint_check && this->has_breakpoint;
-    while (num-- && !(breakpoint_check && this->pc == this->breakpoint)) {
+    while (num--) {
+        // Stop execution early
+        if (breakpoint_check && this->pc == this->breakpoint) {
+            std::cout << "Breakpoint reached at " << std::setw(16) << std::setfill('0') << std::hex << this->pc << std::endl;
+            break;
+        }
+        if (this->pc & 0x3) {
+            std::cout << "Error: misaligned pc" << std::endl;
+            break;
+        }
+
         // Fetch
         uint32_t instruction = this->fetch();
         uint64_t original_pc = this->pc;
@@ -53,10 +51,47 @@ void processor::execute(unsigned int num, bool breakpoint_check) {
 
         // Increment program counter
         if (this->pc == original_pc) this->pc += 4;
+        this->instruction_count += 1;
+    }
+}
+
+bool take_branch(uint8_t funct3, uint64_t lval, uint64_t rval) {
+    enum Branch_Type : uint8_t {
+        BEQ     =   0x0, // 0b000
+        BNE     =   0x1, // 0b001
+        BLT     =   0x4, // 0b100
+        BGE     =   0x5, // 0b101
+        BLTU    =   0x6, // 0b110
+        BGEU    =   0x7, // 0b111
+    };
+
+    switch (static_cast<Branch_Type>(funct3)) {
+        case Branch_Type::BEQ:  return lval == rval;
+        case Branch_Type::BNE:  return lval != rval;
+        case Branch_Type::BLTU: return lval <  rval;
+        case Branch_Type::BGEU: return lval >= rval;
+        case Branch_Type::BLT:  return int64_t(lval) <  int64_t(rval);
+        case Branch_Type::BGE:  return int64_t(lval) >= int64_t(rval);
+        default: return false;
     }
 }
 
 void processor::execute(uint32_t instruction) {
+    enum Opcode : uint8_t {
+        LUI     =   0x37, // 0b0110111, // LUI
+        AUIPC   =   0x17, // 0b0010111, // AUIPIC
+        JAL     =   0x6f, // 0b1101111, // JAL
+        JALR    =   0x67, // 0b1100111, // JALR
+        BRANCH  =   0x63, // 0b1100011, // BEQ, BNE, BLT, BGE, BLTU, BGEU
+        LOAD    =   0x03, // 0b0000011, // LB, LH, LW, LBU, LHU | LWU, LD
+        STORE   =   0x23, // 0b0100011, // SB, SH, SW | SD
+        ARITH_I =   0x13, // 0b0010011, // ADDI, SLTI, SLTIU, XORI, ORI, ANDI, SLLI, SRLI, SRAI | SLLI, SRLI, SRAI
+        ARITH   =   0x33, // 0b0110011, // ADD, SUB, SLL, SLT, SLTU, XOR, SRL, SRA, OR, AND
+        FENCE   =   0x0f, // 0b0001111, // FENCE 
+        E_INSTR =   0x73, // 0b1110011, // ECALL, EBREAK
+        ARITH_W =   0x1b, // 0b0011011  // ADDIW, SLLIW, SRLIW, SRAIW, ADDW, SUBW, SLLW, SRLW, SRAW
+    };
+
     Opcode opcode = static_cast<Opcode>(uint8_t(instruction & 0x7f));
     uint8_t funct3 = (instruction >> 12) & 0x7;
     size_t rd = (instruction >> 7) & 0x1f;
@@ -66,19 +101,40 @@ void processor::execute(uint32_t instruction) {
     uint64_t immediate_unsigned = 0;
     switch (opcode) {
         case Opcode::LUI: // LUI
-            immediate_signed = uimmediate(instruction);
+            immediate_signed = upper_immediate(instruction);
             this->set_reg(rd, immediate_signed);
             break;
         case Opcode::AUIPC: // AUIPIC
-            immediate_signed = uimmediate(instruction);
+            immediate_signed = upper_immediate(instruction);
             immediate_signed += this->pc;
             this->set_reg(rd, immediate_signed);
             break;
         case Opcode::JAL: // JAL
+            // Weird immediate encoding needed! 20|10:1|11|19:12
+            immediate_signed  = int32_t (instruction & 0x80000000) >> 11; 
+            immediate_signed |= int32_t (instruction & 0x7fe00000) >> 20;
+            immediate_signed |= int32_t (instruction & 0x00100000) >> 9;
+            immediate_signed |= int32_t (instruction & 0x000ff000);
+            // Store return address in rd & update PC
+            this->set_reg(rd, this->pc+4);
+            this->pc += immediate_signed;
             break;
         case Opcode::JALR: // JALR
+            immediate_signed = immediate_11_0(instruction);
+            immediate_signed += this->registers[rs1];
+            // Store return address in rd & update PC
+            this->set_reg(rd, this->pc+4);
+            this->pc = immediate_signed;
             break;
         case Opcode::BRANCH: // BEQ, BNE, BLT, BGE, BLTU, BGEU
+            // Weird immediate encoding needed! 12|10:5, 4:1|11
+            immediate_signed  = int32_t (instruction & 0x80000000) >> 11;
+            immediate_signed |= int32_t (instruction & 0x7e000000) >> 12;
+            immediate_signed |= int32_t (instruction & 0x00000f00) >> 7;
+            immediate_signed |= int32_t (instruction & 0x00000080) << 4;
+            if (take_branch(funct3, this->registers[rs1], this->registers[rs2])) {
+                this->pc += immediate_signed;
+            }
             break;
         case Opcode::LOAD: // LB, LH, LW, LBU, LHU | LWU, LD
             break;
@@ -93,6 +149,11 @@ void processor::execute(uint32_t instruction) {
         case Opcode::FENCE: // FENCE
             break;
         case Opcode::E_INSTR: // ECALL, EBREAK
+            break;
+        default:
+            if (this->verbose) {
+                std::cout << "Malformed opcode 0x" << std::setw(2) << std::setfill('0') << std::hex << opcode << std::endl;
+            }
             break;
     }
 }
