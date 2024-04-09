@@ -127,25 +127,131 @@ void processor::store(uint8_t width, size_t src, size_t base, int64_t offset) {
     }
     this->main_memory->write_doubleword(address, doubleword << shift, mask << shift);
 }
+            
+uint64_t op(uint8_t funct7, uint8_t funct3, uint64_t rs1, uint64_t rs2) {
+    // Note: funct7 only has two possible values, 0b0100000 and 0
+    enum Op_Type : uint8_t {
+        ADD     =   0x00, // 0b00 ... 000
+        SUB     =   0x20, // 0b01 ... 000
+        SLL     =   0x01, // 0b00 ... 001
+        SLT     =   0x02, // 0b00 ... 010
+        SLTU    =   0x03, // 0b00 ... 011
+        XOR     =   0x04, // 0b00 ... 100
+        SRL     =   0x05, // 0b00 ... 101
+        SRA     =   0x25, // 0b01 ... 101
+        OR      =   0x06, // 0b00 ... 110
+        AND     =   0x07, // 0b00 ... 111
+    };
+    uint8_t op_type = funct7 | funct3;
+    int64_t ri1 = rs1, ri2 = rs2;
+    switch (static_cast<Op_Type>(op_type)) {
+        case Op_Type::ADD:  return rs1 + rs2;
+        case Op_Type::SUB:  return rs1 - rs2;
+        case Op_Type::XOR:  return rs1 ^ rs2;
+        case Op_Type::OR:   return rs1 | rs2;
+        case Op_Type::AND:  return rs1 & rs2;
+        case Op_Type::SLT:  return rs1 < rs2 ? 1 : 0;
+        case Op_Type::SLTU: return ri1 < ri2 ? 1 : 0;
+        case Op_Type::SLL:  return rs1 << (rs2 & 0x1f);
+        case Op_Type::SRL:  return rs1 >> (rs2 & 0x1f);
+        case Op_Type::SRA:  return ri1 >> (rs2 & 0x1f);
+        default: return 0;
+    }
+}
+            
+uint64_t op_imm(uint8_t funct3, uint64_t rs1, uint64_t immediate) {
+    enum Op_Type : uint8_t {
+        ADDI    =   0x00, // 0b000
+        SLLI    =   0x01, // 0b001
+        SLTI    =   0x02, // 0b010
+        SLTIU   =   0x03, // 0b011
+        XORI    =   0x04, // 0b100
+        SRLI    =   0x05, // 0b101
+        ORI     =   0x06, // 0b110
+        ANDI    =   0x07, // 0b111
+        SRAI    =   0x08, // custom - SRAI & immediate[10]
+    };
+    Op_Type op_type = static_cast<Op_Type>(funct3);
+    uint8_t shamt = immediate & 0x3f;
+    int64_t ri1 = rs1, i_imm = immediate;
+    if (op_type == Op_Type::SRLI && (immediate & 0x400)) op_type = Op_Type::SRAI;
+    switch (op_type) {
+        case Op_Type::ADDI:  return rs1 +  immediate;
+        case Op_Type::XORI:  return rs1 ^  immediate;
+        case Op_Type::ORI:   return rs1 |  immediate;
+        case Op_Type::ANDI:  return rs1 &  immediate;
+        case Op_Type::SLLI:  return rs1 << shamt;
+        case Op_Type::SRLI:  return rs1 >> shamt;
+        case Op_Type::SRAI:  return ri1 >> shamt;
+        case Op_Type::SLTI:  return ri1 <  i_imm     ? 1 : 0;
+        case Op_Type::SLTIU: return rs1 <  immediate ? 1 : 0;
+        default: return 0;
+    }
+}
+
+uint64_t op_imm_32(uint8_t funct3, uint64_t rs1, uint64_t immediate) {
+    enum Op_Type : uint8_t {
+        ADDIW   =   0x00, // 0b000
+        SLLIW   =   0x01, // 0b001
+        SRLIW   =   0x05, // 0b101
+        SRAIW   =   0x08, // custom - SRLIW & immediate[10]
+    };
+    Op_Type op_type = static_cast<Op_Type>(funct3);
+    if (op_type == Op_Type::SRLIW && (immediate & 0x400)) op_type = Op_Type::SRAIW;
+    uint8_t shamt = immediate & 0x1f;
+    int32_t ri1 = rs1, i_imm = immediate;
+    uint32_t ru1 = rs1;
+    switch (op_type) {
+        case Op_Type::ADDIW: return int64_t(int32_t(ri1 + i_imm));
+        case Op_Type::SLLIW: return int64_t(int32_t(ri1 << shamt));
+        case Op_Type::SRLIW: return int64_t(int32_t(ru1 >> shamt));
+        case Op_Type::SRAIW: return int64_t(int32_t(ri1 >> shamt));
+        default: return 0;
+    }
+}
+
+uint64_t op_32(uint8_t funct7, uint8_t funct3, uint64_t rs1, uint64_t rs2) {
+    enum Op_Type : uint8_t {
+        ADDW    =   0x00, // 0b00 ... 000
+        SUBW    =   0x20, // 0b01 ... 000
+        SLLW    =   0x01, // 0b00 ... 001
+        SRLW    =   0x05, // 0b00 ... 101
+        SRAW    =   0x25, // 0b01 ... 101
+    };
+    Op_Type op_type = static_cast<Op_Type>(funct3 | funct7);
+    int32_t ri1 = rs1;
+    uint32_t ru1 = rs1, ru2 = rs2;
+    uint8_t shamt = rs2 & 0x1f;
+    switch (op_type) {
+        case Op_Type::ADDW: return int64_t(int32_t(ru1 + ru2));
+        case Op_Type::SUBW: return int64_t(int32_t(ru1 - ru2));
+        case Op_Type::SLLW: return int64_t(int32_t(ri1 << shamt));
+        case Op_Type::SRLW: return int64_t(int32_t(ru1 >> shamt));
+        case Op_Type::SRAW: return int64_t(int32_t(ri1 >> shamt));
+        default: return 0;
+    }
+}
 
 void processor::execute(uint32_t instruction) {
     enum Opcode : uint8_t {
-        LUI     =   0x37, // 0b0110111, // LUI
-        AUIPC   =   0x17, // 0b0010111, // AUIPIC
-        JAL     =   0x6f, // 0b1101111, // JAL
-        JALR    =   0x67, // 0b1100111, // JALR
-        BRANCH  =   0x63, // 0b1100011, // BEQ, BNE, BLT, BGE, BLTU, BGEU
-        LOAD    =   0x03, // 0b0000011, // LB, LH, LW, LBU, LHU | LWU, LD
-        STORE   =   0x23, // 0b0100011, // SB, SH, SW | SD
-        ARITH_I =   0x13, // 0b0010011, // ADDI, SLTI, SLTIU, XORI, ORI, ANDI, SLLI, SRLI, SRAI | SLLI, SRLI, SRAI
-        ARITH   =   0x33, // 0b0110011, // ADD, SUB, SLL, SLT, SLTU, XOR, SRL, SRA, OR, AND
-        MISC_MEM=   0x0f, // 0b0001111, // FENCE 
-        SYSTEM  =   0x73, // 0b1110011, // ECALL, EBREAK
-        ARITH_W =   0x1b, // 0b0011011  // ADDIW, SLLIW, SRLIW, SRAIW, ADDW, SUBW, SLLW, SRLW, SRAW
+        LUI      =  0x37, // 0b0110111, // LUI
+        AUIPC    =  0x17, // 0b0010111, // AUIPIC
+        JAL      =  0x6f, // 0b1101111, // JAL
+        JALR     =  0x67, // 0b1100111, // JALR
+        BRANCH   =  0x63, // 0b1100011, // BEQ, BNE, BLT, BGE, BLTU, BGEU
+        LOAD     =  0x03, // 0b0000011, // LB, LH, LW, LBU, LHU | LWU, LD
+        STORE    =  0x23, // 0b0100011, // SB, SH, SW | SD
+        OP_IMM   =  0x13, // 0b0010011, // ADDI, SLTI, SLTIU, XORI, ORI, ANDI, SLLI, SRLI, SRAI | SLLI, SRLI, SRAI
+        OP       =  0x33, // 0b0110011, // ADD, SUB, SLL, SLT, SLTU, XOR, SRL, SRA, OR, AND
+        MISC_MEM =  0x0f, // 0b0001111, // FENCE 
+        SYSTEM   =  0x73, // 0b1110011, // ECALL, EBREAK
+        OP_IMM32 =  0x1b, // 0b0011011  // ADDIW, SLLIW, SRLIW, SRAIW
+        OP_32    =  0x3b, // 0b0111011  // ADDW, SUBW, SLLW, SRLW, SRAW
     };
 
     Opcode opcode = static_cast<Opcode>(uint8_t(instruction & 0x7f));
     uint8_t funct3 = (instruction >> 12) & 0x7;
+    uint8_t funct7 = (instruction >> 25) & 0x7f;
     size_t rd = (instruction >> 7) & 0x1f;
     size_t rs1 = (instruction >> 15) & 0x1f;
     size_t rs2 = (instruction >> 20) & 0x1f;
@@ -196,15 +302,24 @@ void processor::execute(uint32_t instruction) {
             immediate |= int32_t (instruction & 0x00000f80) >> 7;
             this->store(funct3, rs2, rs1, immediate);
             break;
-        case Opcode::ARITH_I: // ADDI, SLTI, SLTIU, XORI, ORI, ANDI, SLLI, SRLI, SRAI | SLLI, SRLI, SRAI
+        case Opcode::OP_IMM : // ADDI, SLTI, SLTIU, XORI, ORI, ANDI, SLLI, SRLI, SRAI | SLLI, SRLI, SRAI
+            immediate  = int32_t (instruction & 0xfff00000) >> 20;
+            this->registers[rd] = op_imm(funct3, this->registers[rs1], immediate);
             break;
-        case Opcode::ARITH: // ADD, SUB, SLL, SLT, SLTU, XOR, SRL, SRA, OR, AND
+        case Opcode::OP: // ADD, SUB, SLL, SLT, SLTU, XOR, SRL, SRA, OR, AND
+            this->registers[rd] = op(funct7, funct3, this->registers[rs1], this->registers[rs2]);
             break;
-        case Opcode::ARITH_W: // ADDIW, SLLIW, SRLIW, SRAIW, ADDW, SUBW, SLLW, SRLW, SRAW
+        case Opcode::OP_IMM32: // ADDIW, SLLIW, SRLIW, SRAIW
+            immediate  = int32_t (instruction & 0xfff00000) >> 20;
+            this->registers[rd] = op_imm_32(funct3, this->registers[rs1], immediate);
+            break;
+        case Opcode::OP_32: // ADDW, SUBW, SLLW, SRLW, SRAW
+            this->registers[rd] = op_32(funct7, funct3, this->registers[rs1], this->registers[rs2]);
             break;
         case Opcode::MISC_MEM: // FENCE
             break;
         case Opcode::SYSTEM: // ECALL, EBREAK
+            std::cout << "Error! System instructions are currently unimplemented." << std::endl;
             break;
         default:
             if (this->verbose) {
