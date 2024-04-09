@@ -1,0 +1,3 @@
+#!/bin/bash
+
+cat $1 | diff --strip-trailing-cr - expected/$1
