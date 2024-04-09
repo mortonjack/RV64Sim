@@ -97,43 +97,42 @@ void processor::execute(uint32_t instruction) {
     size_t rd = (instruction >> 7) & 0x1f;
     size_t rs1 = (instruction >> 15) & 0x1f;
     size_t rs2 = (instruction >> 20) & 0x1f;
-    int64_t immediate_signed = 0;
-    uint64_t immediate_unsigned = 0;
+    int64_t immediate = 0;
     switch (opcode) {
         case Opcode::LUI: // LUI
-            immediate_signed = upper_immediate(instruction);
-            this->set_reg(rd, immediate_signed);
+            immediate = upper_immediate(instruction);
+            this->set_reg(rd, immediate);
             break;
         case Opcode::AUIPC: // AUIPIC
-            immediate_signed = upper_immediate(instruction);
-            immediate_signed += this->pc;
-            this->set_reg(rd, immediate_signed);
+            immediate = upper_immediate(instruction);
+            immediate += this->pc;
+            this->set_reg(rd, immediate);
             break;
         case Opcode::JAL: // JAL
             // Weird immediate encoding needed! 20|10:1|11|19:12
-            immediate_signed  = int32_t (instruction & 0x80000000) >> 11; 
-            immediate_signed |= int32_t (instruction & 0x7fe00000) >> 20;
-            immediate_signed |= int32_t (instruction & 0x00100000) >> 9;
-            immediate_signed |= int32_t (instruction & 0x000ff000);
+            immediate  = int32_t (instruction & 0x80000000) >> 11; 
+            immediate |= int32_t (instruction & 0x7fe00000) >> 20;
+            immediate |= int32_t (instruction & 0x00100000) >> 9;
+            immediate |= int32_t (instruction & 0x000ff000);
             // Store return address in rd & update PC
             this->set_reg(rd, this->pc+4);
-            this->pc += immediate_signed;
+            this->pc += immediate;
             break;
         case Opcode::JALR: // JALR
-            immediate_signed = immediate_11_0(instruction);
-            immediate_signed += this->registers[rs1];
+            immediate = immediate_11_0(instruction);
+            immediate += this->registers[rs1];
             // Store return address in rd & update PC
             this->set_reg(rd, this->pc+4);
-            this->pc = immediate_signed;
+            this->pc = uint64_t(immediate) & 0xfffffffffffffffeULL;
             break;
         case Opcode::BRANCH: // BEQ, BNE, BLT, BGE, BLTU, BGEU
             // Weird immediate encoding needed! 12|10:5, 4:1|11
-            immediate_signed  = int32_t (instruction & 0x80000000) >> 11;
-            immediate_signed |= int32_t (instruction & 0x7e000000) >> 12;
-            immediate_signed |= int32_t (instruction & 0x00000f00) >> 7;
-            immediate_signed |= int32_t (instruction & 0x00000080) << 4;
+            immediate  = int32_t (instruction & 0x80000000) >> 21;
+            immediate |= int32_t (instruction & 0x7e000000) >> 20;
+            immediate |= int32_t (instruction & 0x00000f00) >> 7;
+            immediate |= int32_t (instruction & 0x00000080) << 4;
             if (take_branch(funct3, this->registers[rs1], this->registers[rs2])) {
-                this->pc += immediate_signed;
+                this->pc += uint64_t(immediate);
             }
             break;
         case Opcode::LOAD: // LB, LH, LW, LBU, LHU | LWU, LD
