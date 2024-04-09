@@ -1,0 +1,8 @@
+#!/bin/bash
+
+for i in instruction_test_*.log; do
+  echo "**** Checking ${i%.log} *****"
+  cat $i | diff --strip-trailing-cr - expected/$i
+  rm -f $i
+done
+
