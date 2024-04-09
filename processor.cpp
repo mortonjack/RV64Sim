@@ -76,6 +76,58 @@ bool take_branch(uint8_t funct3, uint64_t lval, uint64_t rval) {
     }
 }
 
+void processor::load(uint8_t width, size_t dest, size_t base, int64_t offset) {
+    bool has_sign = !(width & 0x4);
+    int64_t address = int64_t(this->registers[base]) + offset;
+    uint64_t doubleword = this->main_memory->read_doubleword(address);
+    uint8_t shift = (uint64_t(address) % 8) * 8;
+    switch (width & 0x3) {
+        case 0x0: // LB, LBU (1 byte)
+            doubleword &= 0x00000000000000ff << shift;
+            if (has_sign) doubleword = int64_t(doubleword << (56 - shift)) >> (56 - shift);
+            break;
+        case 0x1: // LH, LHU (2 bytes)
+            shift &= 0x18;
+            doubleword &= 0x000000000000ffff << shift;
+            if (has_sign) doubleword = int64_t(doubleword << (48 - shift)) >> (48 - shift);
+            break;
+        case 0x2: // LW, LWU (4 bytes)
+            shift &= 0x10;
+            doubleword &= 0x00000000ffffffff;
+            if (has_sign) doubleword = int64_t(doubleword << (32 - shift)) >> (32 - shift);
+            break;
+        case 0x3: // LD (8 bytes)
+            break;
+    }
+    this->set_reg(dest, doubleword);
+}
+
+void processor::store(uint8_t width, size_t src, size_t base, int64_t offset) {
+    int64_t address = int64_t(this->registers[base]) + offset;
+    uint64_t doubleword = this->registers[src];
+    uint64_t mask = 0;
+    uint8_t shift = (uint64_t(address) % 8) * 8;
+    switch (width & 0x3) {
+        case 0x0: // SB
+            shift &= 0x1c;
+            mask = 0x00000000000000ff;
+            break;
+        case 0x1: // SH
+            shift &= 0x18;
+            mask = 0x000000000000ffff;
+            break;
+        case 0x2: // SW
+            shift &= 0x10;
+            mask = 0x00000000ffffffff;
+            break;
+        case 0x3: // SD
+            shift = 0;
+            mask = 0xffffffffffffffff;
+            break;
+    }
+    this->main_memory->write_doubleword(address, doubleword << shift, mask << shift);
+}
+
 void processor::execute(uint32_t instruction) {
     enum Opcode : uint8_t {
         LUI     =   0x37, // 0b0110111, // LUI
@@ -87,8 +139,8 @@ void processor::execute(uint32_t instruction) {
         STORE   =   0x23, // 0b0100011, // SB, SH, SW | SD
         ARITH_I =   0x13, // 0b0010011, // ADDI, SLTI, SLTIU, XORI, ORI, ANDI, SLLI, SRLI, SRAI | SLLI, SRLI, SRAI
         ARITH   =   0x33, // 0b0110011, // ADD, SUB, SLL, SLT, SLTU, XOR, SRL, SRA, OR, AND
-        FENCE   =   0x0f, // 0b0001111, // FENCE 
-        E_INSTR =   0x73, // 0b1110011, // ECALL, EBREAK
+        MISC_MEM=   0x0f, // 0b0001111, // FENCE 
+        SYSTEM  =   0x73, // 0b1110011, // ECALL, EBREAK
         ARITH_W =   0x1b, // 0b0011011  // ADDIW, SLLIW, SRLIW, SRAIW, ADDW, SUBW, SLLW, SRLW, SRAW
     };
 
@@ -127,7 +179,7 @@ void processor::execute(uint32_t instruction) {
             break;
         case Opcode::BRANCH: // BEQ, BNE, BLT, BGE, BLTU, BGEU
             // Weird immediate encoding needed! 12|10:5, 4:1|11
-            immediate  = int32_t (instruction & 0x80000000) >> 21;
+            immediate  = int32_t (instruction & 0x80000000) >> 19;
             immediate |= int32_t (instruction & 0x7e000000) >> 20;
             immediate |= int32_t (instruction & 0x00000f00) >> 7;
             immediate |= int32_t (instruction & 0x00000080) << 4;
@@ -136,8 +188,13 @@ void processor::execute(uint32_t instruction) {
             }
             break;
         case Opcode::LOAD: // LB, LH, LW, LBU, LHU | LWU, LD
+            immediate  = int32_t (instruction & 0xfff00000) >> 20;
+            this->load(funct3, rd, rs1, immediate);
             break;
         case Opcode::STORE: // SB, SH, SW | SD
+            immediate  = int32_t (instruction & 0xfe000000) >> 20;
+            immediate |= int32_t (instruction & 0x00000f80) >> 7;
+            this->store(funct3, rs2, rs1, immediate);
             break;
         case Opcode::ARITH_I: // ADDI, SLTI, SLTIU, XORI, ORI, ANDI, SLLI, SRLI, SRAI | SLLI, SRLI, SRAI
             break;
@@ -145,9 +202,9 @@ void processor::execute(uint32_t instruction) {
             break;
         case Opcode::ARITH_W: // ADDIW, SLLIW, SRLIW, SRAIW, ADDW, SUBW, SLLW, SRLW, SRAW
             break;
-        case Opcode::FENCE: // FENCE
+        case Opcode::MISC_MEM: // FENCE
             break;
-        case Opcode::E_INSTR: // ECALL, EBREAK
+        case Opcode::SYSTEM: // ECALL, EBREAK
             break;
         default:
             if (this->verbose) {

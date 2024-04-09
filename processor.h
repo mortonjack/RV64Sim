@@ -30,6 +30,8 @@ class processor {
 
   uint32_t fetch();
   void execute(uint32_t instruction);
+  void load(uint8_t width, size_t dest, size_t base, int64_t offset);
+  void store(uint8_t width, size_t src, size_t base, int64_t offset);
 
  public:
 
