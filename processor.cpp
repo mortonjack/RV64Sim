@@ -169,7 +169,7 @@ uint64_t op_imm(uint8_t funct3, uint64_t rs1, uint64_t immediate) {
         SRLI    =   0x05, // 0b101
         ORI     =   0x06, // 0b110
         ANDI    =   0x07, // 0b111
-        SRAI    =   0x08, // custom - SRAI & immediate[10]
+        SRAI    =   0x08, // custom - SRLI & immediate[10]
     };
     Op_Type op_type = static_cast<Op_Type>(funct3);
     uint8_t shamt = immediate & 0x3f;
