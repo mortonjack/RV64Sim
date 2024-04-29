@@ -25,49 +25,13 @@
 **** Checking instruction_test_jal *****
 **** Checking instruction_test_jalr *****
 **** Checking instruction_test_lb *****
-3,4c3,4
-< 0000000000000000
-< Instructions executed: 12
----
-> 0000000000000001
-> Instructions executed: 63
 **** Checking instruction_test_lbu *****
-3,4c3,4
-< 0000000000000000
-< Instructions executed: 12
----
-> 0000000000000001
-> Instructions executed: 63
 **** Checking instruction_test_ld *****
 **** Checking instruction_test_lh *****
-3,4c3,4
-< 0000000000000000
-< Instructions executed: 14
----
-> 0000000000000001
-> Instructions executed: 72
 **** Checking instruction_test_lhu *****
-3,4c3,4
-< 0000000000000000
-< Instructions executed: 14
----
-> 0000000000000001
-> Instructions executed: 75
 **** Checking instruction_test_lui *****
 **** Checking instruction_test_lw *****
-3,4c3,4
-< 0000000000000000
-< Instructions executed: 14
----
-> 0000000000000001
-> Instructions executed: 75
 **** Checking instruction_test_lwu *****
-3,4c3,4
-< 0000000000000000
-< Instructions executed: 14
----
-> 0000000000000001
-> Instructions executed: 87
 **** Checking instruction_test_ori *****
 **** Checking instruction_test_or *****
 **** Checking instruction_test_sb *****
@@ -78,12 +42,6 @@
 **** Checking instruction_test_slli *****
 **** Checking instruction_test_slliw *****
 **** Checking instruction_test_sll *****
-3,4c3,4
-< 0000000000000000
-< Instructions executed: 54
----
-> 0000000000000001
-> Instructions executed: 153
 **** Checking instruction_test_sllw *****
 **** Checking instruction_test_slti *****
 **** Checking instruction_test_sltiu *****
@@ -92,22 +50,10 @@
 **** Checking instruction_test_srai *****
 **** Checking instruction_test_sraiw *****
 **** Checking instruction_test_sra *****
-3,4c3,4
-< 0000000000000000
-< Instructions executed: 51
----
-> 0000000000000001
-> Instructions executed: 147
 **** Checking instruction_test_sraw *****
 **** Checking instruction_test_srli *****
 **** Checking instruction_test_srliw *****
 **** Checking instruction_test_srl *****
-3,4c3,4
-< 0000000000000000
-< Instructions executed: 51
----
-> 0000000000000001
-> Instructions executed: 147
 **** Checking instruction_test_srlw *****
 **** Checking instruction_test_sub *****
 **** Checking instruction_test_subw *****

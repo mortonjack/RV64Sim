@@ -85,17 +85,20 @@ void processor::load(uint8_t width, size_t dest, size_t base, int64_t offset) {
     switch (width & 0x3) {
         case 0x0: // LB, LBU (1 byte)
             doubleword &= 0x00000000000000ffULL << shift;
-            if (has_sign) doubleword = int64_t(doubleword << (56 - shift)) >> (56 - shift);
+            doubleword >>= shift;
+            if (has_sign) doubleword = int64_t(doubleword << 56) >> 56;
             break;
         case 0x1: // LH, LHU (2 bytes)
-            shift &= 0x30;
+            shift &= 48;
             doubleword &= 0x000000000000ffffULL << shift;
-            if (has_sign) doubleword = int64_t(doubleword << (48 - shift)) >> (48 - shift);
+            doubleword >>= shift;
+            if (has_sign) doubleword = int64_t(doubleword << 48) >> 48;
             break;
         case 0x2: // LW, LWU (4 bytes)
-            shift &= 0x20;
-            doubleword &= 0x00000000ffffffffULL;
-            if (has_sign) doubleword = int64_t(doubleword << (32 - shift)) >> (32 - shift);
+            shift &= 32;
+            doubleword &= 0x00000000ffffffffULL << shift;
+            doubleword >>= shift;
+            if (has_sign) doubleword = int64_t(doubleword << 32) >> 32;
             break;
         case 0x3: // LD (8 bytes)
             break;
@@ -152,9 +155,9 @@ uint64_t op(uint8_t funct7, uint8_t funct3, uint64_t rs1, uint64_t rs2) {
         case Op_Type::AND:  return rs1 & rs2;
         case Op_Type::SLT:  return ri1 < ri2 ? 1 : 0;
         case Op_Type::SLTU: return rs1 < rs2 ? 1 : 0;
-        case Op_Type::SLL:  return rs1 << (rs2 & 0x1f);
-        case Op_Type::SRL:  return rs1 >> (rs2 & 0x1f);
-        case Op_Type::SRA:  return ri1 >> (rs2 & 0x1f);
+        case Op_Type::SLL:  return rs1 << (rs2 & 0x3f);
+        case Op_Type::SRL:  return rs1 >> (rs2 & 0x3f);
+        case Op_Type::SRA:  return ri1 >> (rs2 & 0x3f);
         default: return 0;
     }
 }
