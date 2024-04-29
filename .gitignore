@@ -31,3 +31,4 @@
 *.out
 *.app
 rv64sim
+*log
