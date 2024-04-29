@@ -20,11 +20,11 @@ constexpr uint64_t lower32(uint64_t doubleword) {
 }
 
 constexpr int64_t upper_immediate(uint32_t instruction) {
-    return int32_t(instruction & 0xfffff000);
+    return static_cast<int32_t>(instruction & 0xfffff000);
 }
 
 constexpr int64_t immediate_11_0(uint32_t instruction) {
-    return int32_t(instruction & 0xfff00000) >> 20;
+    return static_cast<int32_t>(instruction & 0xfff00000) >> 20;
 }
 
 // Execute a number of instructions
@@ -71,34 +71,34 @@ bool take_branch(uint8_t funct3, uint64_t lval, uint64_t rval) {
         case Branch_Type::BNE:  return lval != rval;
         case Branch_Type::BLTU: return lval <  rval;
         case Branch_Type::BGEU: return lval >= rval;
-        case Branch_Type::BLT:  return int64_t(lval) <  int64_t(rval);
-        case Branch_Type::BGE:  return int64_t(lval) >= int64_t(rval);
+        case Branch_Type::BLT:  return static_cast<int64_t>(lval) <  static_cast<int64_t>(rval);
+        case Branch_Type::BGE:  return static_cast<int64_t>(lval) >= static_cast<int64_t>(rval);
         default: return false;
     }
 }
 
 void processor::load(uint8_t width, size_t dest, size_t base, int64_t offset) {
     bool has_sign = !(width & 0x4);
-    int64_t address = int64_t(this->registers[base]) + offset;
+    int64_t address = static_cast<int64_t>(this->registers[base]) + offset;
     uint64_t doubleword = this->main_memory->read_doubleword(address);
-    uint8_t shift = (uint64_t(address) % 8) * 8;
+    uint8_t shift = (static_cast<uint64_t>(address) % 8) * 8;
     switch (width & 0x3) {
         case 0x0: // LB, LBU (1 byte)
             doubleword &= 0x00000000000000ffULL << shift;
             doubleword >>= shift;
-            if (has_sign) doubleword = int64_t(doubleword << 56) >> 56;
+            if (has_sign) doubleword = static_cast<int64_t>(doubleword << 56) >> 56;
             break;
         case 0x1: // LH, LHU (2 bytes)
             shift &= 48;
             doubleword &= 0x000000000000ffffULL << shift;
             doubleword >>= shift;
-            if (has_sign) doubleword = int64_t(doubleword << 48) >> 48;
+            if (has_sign) doubleword = static_cast<int64_t>(doubleword << 48) >> 48;
             break;
         case 0x2: // LW, LWU (4 bytes)
             shift &= 32;
             doubleword &= 0x00000000ffffffffULL << shift;
             doubleword >>= shift;
-            if (has_sign) doubleword = int64_t(doubleword << 32) >> 32;
+            if (has_sign) doubleword = static_cast<int64_t>(doubleword << 32) >> 32;
             break;
         case 0x3: // LD (8 bytes)
             break;
@@ -107,10 +107,10 @@ void processor::load(uint8_t width, size_t dest, size_t base, int64_t offset) {
 }
 
 void processor::store(uint8_t width, size_t src, size_t base, int64_t offset) {
-    int64_t address = int64_t(this->registers[base]) + offset;
+    int64_t address = static_cast<int64_t>(this->registers[base]) + offset;
     uint64_t doubleword = this->registers[src];
     uint64_t mask = 0;
-    uint8_t shift = (uint64_t(address) % 8) * 8;
+    uint8_t shift = (static_cast<uint64_t>(address) % 8) * 8;
     switch (width & 0x3) {
         case 0x0: // SB
             mask = 0x00000000000000ffULL;
@@ -205,10 +205,10 @@ uint64_t op_imm_32(uint8_t funct3, uint64_t rs1, uint64_t immediate) {
     int32_t ri1 = rs1, i_imm = immediate;
     uint32_t ru1 = rs1;
     switch (op_type) {
-        case Op_Type::ADDIW: return int64_t(int32_t(ri1 + i_imm));
-        case Op_Type::SLLIW: return int64_t(int32_t(ri1 << shamt));
-        case Op_Type::SRLIW: return int64_t(int32_t(ru1 >> shamt));
-        case Op_Type::SRAIW: return int64_t(int32_t(ri1 >> shamt));
+        case Op_Type::ADDIW: return static_cast<int64_t>(static_cast<int32_t>(ri1 + i_imm));
+        case Op_Type::SLLIW: return static_cast<int64_t>(static_cast<int32_t>(ri1 << shamt));
+        case Op_Type::SRLIW: return static_cast<int64_t>(static_cast<int32_t>(ru1 >> shamt));
+        case Op_Type::SRAIW: return static_cast<int64_t>(static_cast<int32_t>(ri1 >> shamt));
         default: return 0;
     }
 }
@@ -226,11 +226,11 @@ uint64_t op_32(uint8_t funct7, uint8_t funct3, uint64_t rs1, uint64_t rs2) {
     uint32_t ru1 = rs1, ru2 = rs2;
     uint8_t shamt = rs2 & 0x1f;
     switch (op_type) {
-        case Op_Type::ADDW: return int64_t(int32_t(ru1 + ru2));
-        case Op_Type::SUBW: return int64_t(int32_t(ru1 - ru2));
-        case Op_Type::SLLW: return int64_t(int32_t(ri1 << shamt));
-        case Op_Type::SRLW: return int64_t(int32_t(ru1 >> shamt));
-        case Op_Type::SRAW: return int64_t(int32_t(ri1 >> shamt));
+        case Op_Type::ADDW: return static_cast<int64_t>(static_cast<int32_t>(ru1 + ru2));
+        case Op_Type::SUBW: return static_cast<int64_t>(static_cast<int32_t>(ru1 - ru2));
+        case Op_Type::SLLW: return static_cast<int64_t>(static_cast<int32_t>(ri1 << shamt));
+        case Op_Type::SRLW: return static_cast<int64_t>(static_cast<int32_t>(ru1 >> shamt));
+        case Op_Type::SRAW: return static_cast<int64_t>(static_cast<int32_t>(ri1 >> shamt));
         default: return 0;
     }
 }
@@ -252,7 +252,7 @@ void processor::execute(uint32_t instruction) {
         OP_32    =  0x3b, // 0b0111011  // ADDW, SUBW, SLLW, SRLW, SRAW
     };
 
-    Opcode opcode = static_cast<Opcode>(uint8_t(instruction & 0x7f));
+    Opcode opcode = static_cast<Opcode>(static_cast<uint8_t>(instruction & 0x7f));
     uint8_t funct3 = (instruction >> 12) & 0x7;
     uint8_t funct7 = (instruction >> 25) & 0x7f;
     size_t rd = (instruction >> 7) & 0x1f;
@@ -273,10 +273,10 @@ void processor::execute(uint32_t instruction) {
             break;
         case Opcode::JAL: // JAL
             // Weird immediate encoding needed! 20|10:1|11|19:12
-            immediate  = int32_t (instruction & 0x80000000) >> 11; 
-            immediate |= int32_t (instruction & 0x7fe00000) >> 20;
-            immediate |= int32_t (instruction & 0x00100000) >> 9;
-            immediate |= int32_t (instruction & 0x000ff000);
+            immediate  = static_cast<int32_t>(instruction & 0x80000000) >> 11; 
+            immediate |= static_cast<int32_t>(instruction & 0x7fe00000) >> 20;
+            immediate |= static_cast<int32_t>(instruction & 0x00100000) >> 9;
+            immediate |= static_cast<int32_t>(instruction & 0x000ff000);
             // Store return address in rd & update PC
             if (this->verbose) std::cout << "Executing JAL instruction, immediate " << immediate << " added to PC " << immediate + this->pc << std::endl;
             this->set_reg(rd, this->pc+4);
@@ -288,36 +288,36 @@ void processor::execute(uint32_t instruction) {
             immediate += this->registers[rs1];
             // Store return address in rd & update PC
             this->set_reg(rd, this->pc+4);
-            this->pc = uint64_t(immediate) & 0xfffffffffffffffeULL;
+            this->pc = static_cast<uint64_t>(immediate) & 0xfffffffffffffffeULL;
             break;
         case Opcode::BRANCH: // BEQ, BNE, BLT, BGE, BLTU, BGEU
             // Weird immediate encoding needed! 12|10:5, 4:1|11
-            immediate  = int32_t (instruction & 0x80000000) >> 19;
-            immediate |= int32_t (instruction & 0x7e000000) >> 20;
-            immediate |= int32_t (instruction & 0x00000f00) >> 7;
-            immediate |= int32_t (instruction & 0x00000080) << 4;
+            immediate  = static_cast<int32_t>(instruction & 0x80000000) >> 19;
+            immediate |= static_cast<int32_t>(instruction & 0x7e000000) >> 20;
+            immediate |= static_cast<int32_t>(instruction & 0x00000f00) >> 7;
+            immediate |= static_cast<int32_t>(instruction & 0x00000080) << 4;
             if (take_branch(funct3, this->registers[rs1], this->registers[rs2])) {
-                this->pc += uint64_t(immediate);
+                this->pc += static_cast<uint64_t>(immediate);
             }
             break;
         case Opcode::LOAD: // LB, LH, LW, LBU, LHU | LWU, LD
-            immediate  = int32_t (instruction & 0xfff00000) >> 20;
+            immediate  = static_cast<int32_t>(instruction & 0xfff00000) >> 20;
             this->load(funct3, rd, rs1, immediate);
             break;
         case Opcode::STORE: // SB, SH, SW | SD
-            immediate  = int32_t (instruction & 0xfe000000) >> 20;
-            immediate |= int32_t (instruction & 0x00000f80) >> 7;
+            immediate  = static_cast<int32_t>(instruction & 0xfe000000) >> 20;
+            immediate |= static_cast<int32_t>(instruction & 0x00000f80) >> 7;
             this->store(funct3, rs2, rs1, immediate);
             break;
         case Opcode::OP_IMM : // ADDI, SLTI, SLTIU, XORI, ORI, ANDI, SLLI, SRLI, SRAI | SLLI, SRLI, SRAI
-            immediate  = int32_t (instruction & 0xfff00000) >> 20;
+            immediate  = static_cast<int32_t>(instruction & 0xfff00000) >> 20;
             this->set_reg(rd, op_imm(funct3, this->registers[rs1], immediate));
             break;
         case Opcode::OP: // ADD, SUB, SLL, SLT, SLTU, XOR, SRL, SRA, OR, AND
             this->set_reg(rd, op(funct7, funct3, this->registers[rs1], this->registers[rs2]));
             break;
         case Opcode::OP_IMM32: // ADDIW, SLLIW, SRLIW, SRAIW
-            immediate  = int32_t (instruction & 0xfff00000) >> 20;
+            immediate  = static_cast<int32_t>(instruction & 0xfff00000) >> 20;
             this->set_reg(rd, op_imm_32(funct3, this->registers[rs1], immediate));
             break;
         case Opcode::OP_32: // ADDW, SUBW, SLLW, SRLW, SRAW
