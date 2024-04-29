@@ -12,11 +12,11 @@
 #include "processor.h"
 
 constexpr uint64_t upper32(uint64_t doubleword) {
-    return 0xFFFFFFFF00000000ULL & doubleword;
+    return 0xffffffff00000000ULL & doubleword;
 }
 
 constexpr uint64_t lower32(uint64_t doubleword) {
-    return 0xFFFFFFFFULL & doubleword;
+    return 0xffffffffULL & doubleword;
 }
 
 constexpr int64_t upper_immediate(uint32_t instruction) {
@@ -32,6 +32,7 @@ void processor::execute(unsigned int num, bool breakpoint_check) {
     breakpoint_check = breakpoint_check && this->has_breakpoint;
     while (num--) {
         // Stop execution early
+        if (this->verbose) std::cout << "Running instruction at 0x" << std::setw(16) << std::setfill('0') << std::hex << this->pc << std::endl;
         if (breakpoint_check && this->pc == this->breakpoint) {
             std::cout << "Breakpoint reached at " << std::setw(16) << std::setfill('0') << std::hex << this->pc << std::endl;
             break;
@@ -83,17 +84,17 @@ void processor::load(uint8_t width, size_t dest, size_t base, int64_t offset) {
     uint8_t shift = (uint64_t(address) % 8) * 8;
     switch (width & 0x3) {
         case 0x0: // LB, LBU (1 byte)
-            doubleword &= 0x00000000000000ff << shift;
+            doubleword &= 0x00000000000000ffULL << shift;
             if (has_sign) doubleword = int64_t(doubleword << (56 - shift)) >> (56 - shift);
             break;
         case 0x1: // LH, LHU (2 bytes)
-            shift &= 0x18;
-            doubleword &= 0x000000000000ffff << shift;
+            shift &= 0x30;
+            doubleword &= 0x000000000000ffffULL << shift;
             if (has_sign) doubleword = int64_t(doubleword << (48 - shift)) >> (48 - shift);
             break;
         case 0x2: // LW, LWU (4 bytes)
-            shift &= 0x10;
-            doubleword &= 0x00000000ffffffff;
+            shift &= 0x20;
+            doubleword &= 0x00000000ffffffffULL;
             if (has_sign) doubleword = int64_t(doubleword << (32 - shift)) >> (32 - shift);
             break;
         case 0x3: // LD (8 bytes)
@@ -109,20 +110,19 @@ void processor::store(uint8_t width, size_t src, size_t base, int64_t offset) {
     uint8_t shift = (uint64_t(address) % 8) * 8;
     switch (width & 0x3) {
         case 0x0: // SB
-            shift &= 0x1c;
-            mask = 0x00000000000000ff;
+            mask = 0x00000000000000ffULL;
             break;
         case 0x1: // SH
-            shift &= 0x18;
-            mask = 0x000000000000ffff;
+            shift &= 0x30;
+            mask = 0x000000000000ffffULL;
             break;
         case 0x2: // SW
-            shift &= 0x10;
-            mask = 0x00000000ffffffff;
+            shift &= 0x20;
+            mask = 0x00000000ffffffffULL;
             break;
         case 0x3: // SD
             shift = 0;
-            mask = 0xffffffffffffffff;
+            mask = 0xffffffffffffffffULL;
             break;
     }
     this->main_memory->write_doubleword(address, doubleword << shift, mask << shift);
@@ -150,8 +150,8 @@ uint64_t op(uint8_t funct7, uint8_t funct3, uint64_t rs1, uint64_t rs2) {
         case Op_Type::XOR:  return rs1 ^ rs2;
         case Op_Type::OR:   return rs1 | rs2;
         case Op_Type::AND:  return rs1 & rs2;
-        case Op_Type::SLT:  return rs1 < rs2 ? 1 : 0;
-        case Op_Type::SLTU: return ri1 < ri2 ? 1 : 0;
+        case Op_Type::SLT:  return ri1 < ri2 ? 1 : 0;
+        case Op_Type::SLTU: return rs1 < rs2 ? 1 : 0;
         case Op_Type::SLL:  return rs1 << (rs2 & 0x1f);
         case Op_Type::SRL:  return rs1 >> (rs2 & 0x1f);
         case Op_Type::SRA:  return ri1 >> (rs2 & 0x1f);
@@ -259,10 +259,12 @@ void processor::execute(uint32_t instruction) {
     switch (opcode) {
         case Opcode::LUI: // LUI
             immediate = upper_immediate(instruction);
+            if (this->verbose) std::cout << "Executing LUI instruction, upper immediate " << immediate << std::endl;
             this->set_reg(rd, immediate);
             break;
         case Opcode::AUIPC: // AUIPIC
             immediate = upper_immediate(instruction);
+            if (this->verbose) std::cout << "Executing AUIPC instruction, upper immediate " << immediate << " added to PC " << immediate + this->pc << std::endl;
             immediate += this->pc;
             this->set_reg(rd, immediate);
             break;
@@ -273,11 +275,13 @@ void processor::execute(uint32_t instruction) {
             immediate |= int32_t (instruction & 0x00100000) >> 9;
             immediate |= int32_t (instruction & 0x000ff000);
             // Store return address in rd & update PC
+            if (this->verbose) std::cout << "Executing JAL instruction, immediate " << immediate << " added to PC " << immediate + this->pc << std::endl;
             this->set_reg(rd, this->pc+4);
             this->pc += immediate;
             break;
         case Opcode::JALR: // JALR
             immediate = immediate_11_0(instruction);
+            if (this->verbose) std::cout << "Executing JALR instruction, storing pc " << rd << " and immediate " << immediate << " added to register " << rs1 << ": " << immediate + this->registers[rs1] << std::endl;
             immediate += this->registers[rs1];
             // Store return address in rd & update PC
             this->set_reg(rd, this->pc+4);
@@ -304,17 +308,17 @@ void processor::execute(uint32_t instruction) {
             break;
         case Opcode::OP_IMM : // ADDI, SLTI, SLTIU, XORI, ORI, ANDI, SLLI, SRLI, SRAI | SLLI, SRLI, SRAI
             immediate  = int32_t (instruction & 0xfff00000) >> 20;
-            this->registers[rd] = op_imm(funct3, this->registers[rs1], immediate);
+            this->set_reg(rd, op_imm(funct3, this->registers[rs1], immediate));
             break;
         case Opcode::OP: // ADD, SUB, SLL, SLT, SLTU, XOR, SRL, SRA, OR, AND
-            this->registers[rd] = op(funct7, funct3, this->registers[rs1], this->registers[rs2]);
+            this->set_reg(rd, op(funct7, funct3, this->registers[rs1], this->registers[rs2]));
             break;
         case Opcode::OP_IMM32: // ADDIW, SLLIW, SRLIW, SRAIW
             immediate  = int32_t (instruction & 0xfff00000) >> 20;
-            this->registers[rd] = op_imm_32(funct3, this->registers[rs1], immediate);
+            this->set_reg(rd, op_imm_32(funct3, this->registers[rs1], immediate));
             break;
         case Opcode::OP_32: // ADDW, SUBW, SLLW, SRLW, SRAW
-            this->registers[rd] = op_32(funct7, funct3, this->registers[rs1], this->registers[rs2]);
+            this->set_reg(rd, op_32(funct7, funct3, this->registers[rs1], this->registers[rs2]));
             break;
         case Opcode::MISC_MEM: // FENCE
             break;
@@ -340,7 +344,7 @@ processor::processor (memory* main_memory, bool verbose, bool stage2):
     instruction_count(0), 
     pc(0), 
     has_breakpoint(false),
-    registers(),
+    registers({0}),
     main_memory(main_memory)
 {}
 

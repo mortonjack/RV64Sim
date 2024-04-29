@@ -6,39 +6,49 @@
 
 **************************************************************** */
 
-#include <iostream> 
+#include <cstdint>
+#include <cstdio>
 #include <fstream>
 #include <iomanip>
+#include <iostream>
 #include <stdlib.h>
-#include <cstdio>
-#include <cstdint>
 
 #include "memory.h"
 
 // Constructor
-memory::memory(bool verbose) : verbose(verbose)
-{}
+memory::memory(bool verbose) : verbose(verbose) {}
+
+void memory::validate_address(uint64_t address) {
+  uint64_t key = address_key(address);
+  if (this->store.find(key) == this->store.end()) {
+    this->store[key] = {0};
+  }
+}
 
 // Read a doubleword of data from a doubleword-aligned address.
 // If the address is not a multiple of 8, it is rounded down to a multiple of 8.
-uint64_t memory::read_doubleword (uint64_t address) {
-    uint64_t key = address_key(address);
-    size_t index = address_index(address);
-    return this->store[key][index];
+uint64_t memory::read_doubleword(uint64_t address) {
+  validate_address(address);
+  uint64_t key = address_key(address);
+  size_t index = address_index(address);
+  return this->store[key][index];
 }
 
 // Write a doubleword of data to a doubleword-aligned address.
 // If the address is not a multiple of 8, it is rounded down to a multiple of 8.
-// The mask contains 1s for bytes to be updated and 0s for bytes that are to be unchanged.
-void memory::write_doubleword (uint64_t address, uint64_t data, uint64_t mask) {
-    uint64_t value = (read_doubleword(address) & (~mask)) | (data & mask);
-    uint64_t key = address_key(address);
-    size_t index = address_index(address);
-    this->store[key][index] = value;
+// The mask contains 1s for bytes to be updated and 0s for bytes that are to be
+// unchanged.
+void memory::write_doubleword(uint64_t address, uint64_t data, uint64_t mask) {
+  validate_address(address);
+  uint64_t value = (read_doubleword(address) & (~mask)) | (data & mask);
+  uint64_t key = address_key(address);
+  size_t index = address_index(address);
+  this->store[key][index] = value;
 }
 
-// Load a hex image file and provide the start address for execution from the file in start_address.
-// Return true if the file was read without error, or false otherwise.
+// Load a hex image file and provide the start address for execution from the
+// file in start_address. Return true if the file was read without error, or
+// false otherwise.
 bool memory::load_file(std::string file_name, uint64_t &start_address) {
   std::ifstream input_file(file_name);
   std::string input;
@@ -63,8 +73,9 @@ bool memory::load_file(std::string file_name, uint64_t &start_address) {
       line_count++;
       input_file >> record_start;
       if (record_start != ':') {
-          std::cout << "Input line " << std::dec << line_count << " does not start with colon character" << std::endl;
-	return false;
+        std::cout << "Input line " << std::dec << line_count
+                  << " does not start with colon character" << std::endl;
+        return false;
       }
       input_file.get(byte_string, 3);
       sscanf(byte_string, "%x", &record_length);
@@ -73,63 +84,66 @@ bool memory::load_file(std::string file_name, uint64_t &start_address) {
       input_file.get(byte_string, 3);
       sscanf(byte_string, "%x", &record_type);
       switch (record_type) {
-      case 0x00:  // Data record
-	for (unsigned int i = 0; i < record_length; i++) {
-	  input_file.get(byte_string, 3);
-	  sscanf(byte_string, "%x", &record_data);
-	  load_address = (load_base_address | (uint64_t)(record_address)) + i;
-	  load_data = (uint64_t)(record_data) << ((load_address % 8) * 8);
-	  load_mask = 0x00000000000000ffULL << ((load_address % 8) * 8);
-	  write_doubleword(load_address & 0xfffffffffffffff8ULL, load_data, load_mask);
-	  byte_count++;
-	}
-	break;
-      case 0x01:  // End of file
-	end_of_file_record = true;
-	break;
-      case 0x02:  // Extended segment address (set bits 19:4 of load base address)
-	load_base_address = 0x0000000000000000ULL;
-	for (unsigned int i = 0; i < record_length; i++) {
-	  input_file.get(byte_string, 3);
-	  sscanf(byte_string, "%x", &record_data);
-	  load_base_address = (load_base_address << 8) | (record_data << 4);
-	}
-	break;
-      case 0x03:  // Start segment address (ignored)
-	for (unsigned int i = 0; i < record_length; i++) {
-	  input_file.get(byte_string, 3);
-	  sscanf(byte_string, "%x", &record_data);
-	}
-	break;
-      case 0x04:  // Extended linear address (set upper halfword of load base address)
-	load_base_address = 0x0000000000000000ULL;
-	for (unsigned int i = 0; i < record_length; i++) {
-	  input_file.get(byte_string, 3);
-	  sscanf(byte_string, "%x", &record_data);
-	  load_base_address = (load_base_address << 8) | (record_data << 16);
-	}
-	break;
-      case 0x05:  // Start linear address (set execution start address)
-	start_address = 0x0000000000000000ULL;
-	for (unsigned int i = 0; i < record_length; i++) {
-	  input_file.get(byte_string, 3);
-	  sscanf(byte_string, "%x", &record_data);
-	  start_address = (start_address << 8) | record_data;
-	}
-	break;
+      case 0x00: // Data record
+        for (unsigned int i = 0; i < record_length; i++) {
+          input_file.get(byte_string, 3);
+          sscanf(byte_string, "%x", &record_data);
+          load_address = (load_base_address | (uint64_t)(record_address)) + i;
+          load_data = (uint64_t)(record_data) << ((load_address % 8) * 8);
+          load_mask = 0x00000000000000ffULL << ((load_address % 8) * 8);
+          write_doubleword(load_address & 0xfffffffffffffff8ULL, load_data,
+                           load_mask);
+          byte_count++;
+        }
+        break;
+      case 0x01: // End of file
+        end_of_file_record = true;
+        break;
+      case 0x02: // Extended segment address (set bits 19:4 of load base
+                 // address)
+        load_base_address = 0x0000000000000000ULL;
+        for (unsigned int i = 0; i < record_length; i++) {
+          input_file.get(byte_string, 3);
+          sscanf(byte_string, "%x", &record_data);
+          load_base_address = (load_base_address << 8) | (record_data << 4);
+        }
+        break;
+      case 0x03: // Start segment address (ignored)
+        for (unsigned int i = 0; i < record_length; i++) {
+          input_file.get(byte_string, 3);
+          sscanf(byte_string, "%x", &record_data);
+        }
+        break;
+      case 0x04: // Extended linear address (set upper halfword of load base
+                 // address)
+        load_base_address = 0x0000000000000000ULL;
+        for (unsigned int i = 0; i < record_length; i++) {
+          input_file.get(byte_string, 3);
+          sscanf(byte_string, "%x", &record_data);
+          load_base_address = (load_base_address << 8) | (record_data << 16);
+        }
+        break;
+      case 0x05: // Start linear address (set execution start address)
+        start_address = 0x0000000000000000ULL;
+        for (unsigned int i = 0; i < record_length; i++) {
+          input_file.get(byte_string, 3);
+          sscanf(byte_string, "%x", &record_data);
+          start_address = (start_address << 8) | record_data;
+        }
+        break;
       }
       input_file.get(byte_string, 3);
       sscanf(byte_string, "%x", &record_checksum);
       input_file.ignore();
       if (end_of_file_record)
-	break;
+        break;
     }
     input_file.close();
-    std::cout << std::dec << byte_count << " bytes loaded, start address = "
-	 << std::setw(16) << std::setfill('0') << std::hex << start_address << std::endl;
+    std::cout << std::dec << byte_count
+              << " bytes loaded, start address = " << std::setw(16)
+              << std::setfill('0') << std::hex << start_address << std::endl;
     return true;
-  }
-  else {
+  } else {
     std::cout << "Failed to open file" << std::endl;
     return false;
   }
