@@ -1,0 +1,3 @@
+#!/bin/bash
+
+../rv64sim < $1.cmd | diff --strip-trailing-cr - expected/$1.log

@@ -1,0 +1,3 @@
+#!/bin/bash
+
+./run_stage_2_tests >/dev/null && echo "Tests complete, checking output" && ./check_tests >test_output_log && echo "Results saved in test_output_log"
