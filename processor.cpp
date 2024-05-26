@@ -346,6 +346,7 @@ void processor::system(uint32_t csr, size_t src, size_t dest, uint8_t funct3) {
     enum class Op_Type : uint8_t {
         ECALL   =   0x00,
         EBREAK  =   0x10,
+        MRET    =   0x11,
         CSRRW   =   0x01,
         CSRRS   =   0x02,
         CSRRC   =   0x03,
@@ -355,6 +356,8 @@ void processor::system(uint32_t csr, size_t src, size_t dest, uint8_t funct3) {
     };
     Op_Type op = static_cast<Op_Type>(funct3);
     if (op == Op_Type::ECALL && csr == 1) op = Op_Type::EBREAK;
+    // TODO: Figure out REAL funct12 value for MRET
+    if (op == Op_Type::ECALL && csr != 0) op = Op_Type::MRET;
     uint64_t rs1 = this->registers[src];
     uint64_t csr_val = this->read_csr(csr);
     uint64_t imm = src;
@@ -362,6 +365,8 @@ void processor::system(uint32_t csr, size_t src, size_t dest, uint8_t funct3) {
         case Op_Type::ECALL:
             break;
         case Op_Type::EBREAK:
+            break;
+        case Op_Type::MRET:
             break;
         case Op_Type::CSRRW:
             this->set_reg(dest, csr_val);
@@ -406,7 +411,9 @@ processor::processor (memory* main_memory, bool verbose, bool stage2):
     mcause(0),
     mtval(0),
     mip(0)
-{}
+{
+    this->set_prv(3);
+}
 
 // Display PC value
 void processor::show_pc() {
@@ -443,12 +450,30 @@ void processor::set_breakpoint(uint64_t address) {
 // Show privilege level
 // Empty implementation for stage 1, required for stage 2
 void processor::show_prv() 
-{}
+{
+    switch (this->get_prv()) {
+        case processor::Privilege::User:
+            std::cout << "0 (user)" << std::endl;
+            break;
+        case processor::Privilege::Machine:
+            std::cout << "3 (machine)" << std::endl;
+            break;
+    }
+}
 
 // Set privilege level
 // Empty implementation for stage 1, required for stage 2
 void processor::set_prv(unsigned int prv_num) 
-{}
+{
+    // TODO: Error handle incorrect privilege number
+    if (prv_num != 0 && prv_num != 3) return;
+    this->mstatus = (this->mstatus & ~(0x3 << 11)) | (prv_num << 11);
+}
+
+processor::Privilege processor::get_prv()
+{
+    return (this->mstatus >> 11) & 0x3 ? Privilege::Machine : Privilege::User;
+}
 
 enum class CSR: uint32_t {
     mvendorid   =   0xF11, // MRO
