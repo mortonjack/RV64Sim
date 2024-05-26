@@ -28,10 +28,22 @@ class processor {
   // We do not have ownership over this object! Do not free it!
   memory* main_memory;
 
+  // Control and Status Registers
+  uint64_t mstatus;
+  uint64_t mie;
+  uint64_t mtvec;
+  uint64_t mscratch;
+  uint64_t mepc;
+  uint64_t mcause;
+  uint64_t mtval;
+  uint64_t mip;
+
   uint32_t fetch();
   void execute(uint32_t instruction);
   void load(uint8_t width, size_t dest, size_t base, int64_t offset);
   void store(uint8_t width, size_t src, size_t base, int64_t offset);
+  void system(uint32_t csr, size_t src, size_t dest, uint8_t funct3);
+  uint64_t read_csr(uint32_t csr);
 
  public:
 

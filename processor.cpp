@@ -57,7 +57,7 @@ void processor::execute(unsigned int num, bool breakpoint_check) {
 }
 
 bool take_branch(uint8_t funct3, uint64_t lval, uint64_t rval) {
-    enum Branch_Type : uint8_t {
+    enum class Branch_Type : uint8_t {
         BEQ     =   0x0, // 0b000
         BNE     =   0x1, // 0b001
         BLT     =   0x4, // 0b100
@@ -133,7 +133,7 @@ void processor::store(uint8_t width, size_t src, size_t base, int64_t offset) {
             
 uint64_t op(uint8_t funct7, uint8_t funct3, uint64_t rs1, uint64_t rs2) {
     // Note: funct7 only has two possible values, 0b0100000 and 0
-    enum Op_Type : uint8_t {
+    enum class Op_Type : uint8_t {
         ADD     =   0x00, // 0b00 ... 000
         SUB     =   0x20, // 0b01 ... 000
         SLL     =   0x01, // 0b00 ... 001
@@ -163,7 +163,7 @@ uint64_t op(uint8_t funct7, uint8_t funct3, uint64_t rs1, uint64_t rs2) {
 }
             
 uint64_t op_imm(uint8_t funct3, uint64_t rs1, uint64_t immediate) {
-    enum Op_Type : uint8_t {
+    enum class Op_Type : uint8_t {
         ADDI    =   0x00, // 0b000
         SLLI    =   0x01, // 0b001
         SLTI    =   0x02, // 0b010
@@ -193,7 +193,7 @@ uint64_t op_imm(uint8_t funct3, uint64_t rs1, uint64_t immediate) {
 }
 
 uint64_t op_imm_32(uint8_t funct3, uint64_t rs1, uint64_t immediate) {
-    enum Op_Type : uint8_t {
+    enum class Op_Type : uint8_t {
         ADDIW   =   0x00, // 0b000
         SLLIW   =   0x01, // 0b001
         SRLIW   =   0x05, // 0b101
@@ -214,7 +214,7 @@ uint64_t op_imm_32(uint8_t funct3, uint64_t rs1, uint64_t immediate) {
 }
 
 uint64_t op_32(uint8_t funct7, uint8_t funct3, uint64_t rs1, uint64_t rs2) {
-    enum Op_Type : uint8_t {
+    enum class Op_Type : uint8_t {
         ADDW    =   0x00, // 0b00 ... 000
         SUBW    =   0x20, // 0b01 ... 000
         SLLW    =   0x01, // 0b00 ... 001
@@ -236,7 +236,7 @@ uint64_t op_32(uint8_t funct7, uint8_t funct3, uint64_t rs1, uint64_t rs2) {
 }
 
 void processor::execute(uint32_t instruction) {
-    enum Opcode : uint8_t {
+    enum class Opcode : uint8_t {
         LUI      =  0x37, // 0b0110111, // LUI
         AUIPC    =  0x17, // 0b0010111, // AUIPIC
         JAL      =  0x6f, // 0b1101111, // JAL
@@ -247,7 +247,7 @@ void processor::execute(uint32_t instruction) {
         OP_IMM   =  0x13, // 0b0010011, // ADDI, SLTI, SLTIU, XORI, ORI, ANDI, SLLI, SRLI, SRAI | SLLI, SRLI, SRAI
         OP       =  0x33, // 0b0110011, // ADD, SUB, SLL, SLT, SLTU, XOR, SRL, SRA, OR, AND
         MISC_MEM =  0x0f, // 0b0001111, // FENCE 
-        SYSTEM   =  0x73, // 0b1110011, // ECALL, EBREAK
+        SYSTEM   =  0x73, // 0b1110011, // ECALL, EBREAK, CSR*
         OP_IMM32 =  0x1b, // 0b0011011  // ADDIW, SLLIW, SRLIW, SRAIW
         OP_32    =  0x3b, // 0b0111011  // ADDW, SUBW, SLLW, SRLW, SRAW
     };
@@ -325,12 +325,13 @@ void processor::execute(uint32_t instruction) {
             break;
         case Opcode::MISC_MEM: // FENCE
             break;
-        case Opcode::SYSTEM: // ECALL, EBREAK
-            std::cout << "Error! System instructions are currently unimplemented." << std::endl;
+        case Opcode::SYSTEM: // ECALL, EBREAK, CSR*
+            immediate  = static_cast<uint32_t>(instruction & 0xfff00000) >> 20;
+            this->system(immediate, rs1, rd, funct3);
             break;
         default:
             if (this->verbose) {
-                std::cout << "Malformed opcode 0x" << std::setw(2) << std::setfill('0') << std::hex << opcode << std::endl;
+                std::cout << "Malformed opcode 0x" << std::setw(2) << std::setfill('0') << std::hex << static_cast<uint16_t>(opcode) << std::endl;
             }
             break;
     }
@@ -341,6 +342,54 @@ uint32_t processor::fetch() {
     return (this->pc & 0x4) ? upper32(doubleword) >> 32 : lower32(doubleword);
 }
 
+void processor::system(uint32_t csr, size_t src, size_t dest, uint8_t funct3) {
+    enum class Op_Type : uint8_t {
+        ECALL   =   0x00,
+        EBREAK  =   0x10,
+        CSRRW   =   0x01,
+        CSRRS   =   0x02,
+        CSRRC   =   0x03,
+        CSRRWI  =   0x05,
+        CSRRSI  =   0x06,
+        CSRRCI  =   0x07,
+    };
+    Op_Type op = static_cast<Op_Type>(funct3);
+    if (op == Op_Type::ECALL && csr == 1) op = Op_Type::EBREAK;
+    uint64_t rs1 = this->registers[src];
+    uint64_t csr_val = this->read_csr(csr);
+    uint64_t imm = src;
+    switch (op) {
+        case Op_Type::ECALL:
+            break;
+        case Op_Type::EBREAK:
+            break;
+        case Op_Type::CSRRW:
+            this->set_reg(dest, csr_val);
+            this->set_csr(csr, rs1);
+            break;
+        case Op_Type::CSRRS:
+            this->set_reg(dest, csr_val);
+            this->set_csr(csr, csr_val | rs1);
+            break;
+        case Op_Type::CSRRC:
+            this->set_reg(dest, csr_val);
+            this->set_csr(csr, csr_val & ~rs1);
+            break;
+        case Op_Type::CSRRWI:
+            this->set_reg(dest, csr_val);
+            this->set_csr(csr, imm);
+            break;
+        case Op_Type::CSRRSI:
+            this->set_reg(dest, csr_val);
+            this->set_csr(csr, csr_val | imm);
+            break;
+        case Op_Type::CSRRCI:
+            this->set_reg(dest, csr_val);
+            this->set_csr(csr, csr_val & ~imm);
+            break;
+    }
+}
+
 // Consructor
 processor::processor (memory* main_memory, bool verbose, bool stage2): 
     verbose(verbose),
@@ -348,7 +397,15 @@ processor::processor (memory* main_memory, bool verbose, bool stage2):
     pc(0), 
     has_breakpoint(false),
     registers({0}),
-    main_memory(main_memory)
+    main_memory(main_memory),
+    mstatus(0),
+    mie(0),
+    mtvec(0),
+    mscratch(0),
+    mepc(0),
+    mcause(0),
+    mtval(0),
+    mip(0)
 {}
 
 // Display PC value
@@ -393,15 +450,148 @@ void processor::show_prv()
 void processor::set_prv(unsigned int prv_num) 
 {}
 
+enum class CSR: uint32_t {
+    mvendorid   =   0xF11, // MRO
+    marchid     =   0xF12,
+    mimpid      =   0xF13,
+    mhartid     =   0xF14,
+    mstatus     =   0x300, // MRW
+    misa        =   0x301,
+    mie         =   0x304,
+    mtvec       =   0x305,
+    mscratch    =   0x340,
+    mepc        =   0x341,
+    mcause      =   0x342,
+    mtval       =   0x343,
+    mip         =   0x344,
+};
+
 // Display CSR value
 // Empty implementation for stage 1, required for stage 2
 void processor::show_csr(unsigned int csr_num)
-{}
+{
+    std::cout << std::setw(16) << std::setfill('0') << std::hex << this->read_csr(csr_num) << '\n';
+}
 
 // Set CSR to new value
 // Empty implementation for stage 1, required for stage 2
 void processor::set_csr(unsigned int csr_num, uint64_t new_value) 
-{}
+{
+    // WPRI = Writes Preserve, Reads Ignore
+    // WLRL = Write Legal, Read Legal
+    // WARL = Write Any, Read Legal
+    uint64_t mask;
+    uint64_t fixed;
+    CSR csr = static_cast<CSR>(csr_num);
+    switch (csr) {
+        case CSR::mvendorid:
+            // Fixed value.
+            break;
+        case CSR::marchid:
+            // Fixed value.
+            break;
+        case CSR::mimpid:
+            // Fixed value.
+            break;
+        case CSR::mhartid:
+            // Fixed value.
+            break;
+        case CSR::mstatus:
+            // mie, mpie, mpp implemented
+            // uxl fixed at 2
+            // all others fixed at 0
+            mask    = 0x200001888ULL;
+            //mask  = 0b1000000000000000000001100010001000ULL;
+            fixed   = 0x200000000ULL;
+            //fixed = 0b1000000000000000000000000000000000ULL;
+            this->mstatus = (new_value & mask) | fixed;
+            break;
+        case CSR::misa:
+            // Legal to write to, but value remains fixed
+            break;
+        case CSR::mie:
+            // usie, msie, utie, mtie, ueie, meie implemented
+            // all others fixed at 0
+            mask    = 0x999ULL;
+            //mask  = 0b100110011001ULL;
+            this->mie = new_value & mask;
+            break;
+        case CSR::mtvec:
+            this->mtvec = new_value;
+            break;
+        case CSR::mscratch:
+            this->mscratch = new_value;
+            break;
+        case CSR::mepc:
+            mask    = ~0x3ULL;
+            //mask  = ~0b11ULL;
+            this->mepc = new_value & mask;
+            break;
+        case CSR::mcause:
+            // interrupt bit, 4-bit exception code field implemented
+            // all others fixed at 0
+            mask    = 0x800000000000000fULL;
+            this->mcause = new_value & mask;
+            break;
+        case CSR::mtval:
+            this->mtval = new_value;
+            break;
+        case CSR::mip:
+            // usip, msip, utip, mtip, ueip, meip implemented
+            // all others fixed at 0
+            mask    = 0x999ULL;
+            //mask  = 0b100110011001ULL;
+            this->mip = new_value & mask;
+            break;
+    };
+}
+
+uint64_t processor::read_csr(uint32_t csr) {
+    switch (static_cast<CSR>(csr)) {
+        case CSR::mvendorid:
+            return 0LL;
+            break;
+        case CSR::marchid:
+            return 0LL;
+            break;
+        case CSR::mimpid:
+            // TODO: Replace 2018 with 2024!
+            return 0x2018020000000000LL;
+            break;
+        case CSR::mhartid:
+            return 0LL;
+            break;
+        case CSR::mstatus:
+            return this->mstatus;
+            break;
+        case CSR::misa:
+            return 0x8000000000100100LL;
+            break;
+        case CSR::mie:
+            return this->mie;
+            break;
+        case CSR::mtvec:
+            return this->mtvec;
+            break;
+        case CSR::mscratch:
+            return this->mscratch;
+            break;
+        case CSR::mepc:
+            return this->mepc;
+            break;
+        case CSR::mcause:
+            return this->mcause;
+            break;
+        case CSR::mtval:
+            return this->mtval;
+            break;
+        case CSR::mip:
+            return this->mip;
+            break;
+        default:
+            return 0;
+    };
+}
 
 uint64_t processor::get_instruction_count() {
     return instruction_count;
