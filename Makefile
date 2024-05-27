@@ -1,7 +1,7 @@
 CC=gcc
 CXX=g++
 RM=rm -f
-CPPFLAGS=-g -std=c++11 -Wall -pedantic
+CPPFLAGS=-g -std=c++11 -Wall -pedantic -O3
 LDFLAGS=-g
 LDLIBS=
 

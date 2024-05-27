@@ -356,17 +356,32 @@ void processor::system(uint32_t csr, size_t src, size_t dest, uint8_t funct3) {
     };
     Op_Type op = static_cast<Op_Type>(funct3);
     if (op == Op_Type::ECALL && csr == 1) op = Op_Type::EBREAK;
-    // TODO: Figure out REAL funct12 value for MRET
-    if (op == Op_Type::ECALL && csr != 0) op = Op_Type::MRET;
+    if (op == Op_Type::ECALL && csr == 0x302) op = Op_Type::MRET;
+    if (op == Op_Type::ECALL && csr != 0) return;
     uint64_t rs1 = this->registers[src];
     uint64_t csr_val = this->read_csr(csr);
     uint64_t imm = src;
     switch (op) {
         case Op_Type::ECALL:
+            // Causes environment-call-from-?-mode-exception
+            switch (this->get_prv()) {
+                case Privilege::Machine:
+                    this->mcause = 11;
+                    break;
+                case Privilege::User:
+                    this->mcause = 8;
+                    break;
+            }
+            this->exception_handler();
             break;
         case Op_Type::EBREAK:
+            // Causes breakpoint exception
+            this->mcause = 3;
+            this->mtval = this->pc;
+            this->exception_handler();
             break;
         case Op_Type::MRET:
+            // Requires M privilege, sets pc to value in mepc register
             break;
         case Op_Type::CSRRW:
             this->set_reg(dest, csr_val);
@@ -392,6 +407,19 @@ void processor::system(uint32_t csr, size_t src, size_t dest, uint8_t funct3) {
             this->set_reg(dest, csr_val);
             this->set_csr(csr, csr_val & ~imm);
             break;
+    }
+}
+
+void processor::exception_handler() {
+    if ((this->mcause >> 63) == 0) this->mepc = this->pc;
+    uint64_t base = this->mtvec >> 2;
+    if (this->mtvec & 1) {
+        // Vectored mode
+        uint64_t cause = this->mcause << 2;
+        this->pc = base + cause;
+    } else {
+        // Direct mode
+        this->pc = base;
     }
 }
 
@@ -542,7 +570,9 @@ void processor::set_csr(unsigned int csr_num, uint64_t new_value)
             this->mie = new_value & mask;
             break;
         case CSR::mtvec:
-            this->mtvec = new_value;
+            fixed = new_value & 1;
+            mask = fixed ? ~0xfe : ~0x2;
+            this->mtvec = (new_value & mask) | fixed;
             break;
         case CSR::mscratch:
             this->mscratch = new_value;
