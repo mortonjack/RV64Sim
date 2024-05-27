@@ -512,6 +512,7 @@ bool processor::system(uint32_t csr, size_t src, size_t dest, uint8_t funct3) {
             switch (this->get_prv()) {
                 case Privilege::Machine:
                     this->pc = this->read_csr(static_cast<uint32_t>(CSR::mepc));
+                    this->update_privilege(true);
                 default:
                     return true;
             }
@@ -544,9 +545,29 @@ bool processor::system(uint32_t csr, size_t src, size_t dest, uint8_t funct3) {
     return false;
 }
 
+void processor::update_privilege(bool mret) {
+    uint64_t l_mstatus = this->read_csr(static_cast<uint32_t>(CSR::mstatus));
+    uint32_t mpp = (l_mstatus >> 11) & 0x3ULL;
+    uint32_t mie = (l_mstatus >> 3) & 0x1ULL;
+    uint32_t mpie = (l_mstatus >> 7) & 0x1ULL;
+    if (mret) {
+        mie = mpie;
+        this->privilege = static_cast<Privilege>(mpp);
+        mpie = 1;
+        mpp = static_cast<uint32_t>(Privilege::User);
+    } else {
+        mpie = mie;
+        mie = 0;
+        mpp = static_cast<uint32_t>(this->privilege);
+        this->privilege = Privilege::Machine;
+    }
+    l_mstatus = (mpp << 11) | (mie << 3) | (mpie << 7);
+    this->set_csr(static_cast<uint32_t>(CSR::mstatus), l_mstatus);
+}
+
 void processor::exception_handler() {
     // Set privilege to machine mode
-    this->set_prv(static_cast<uint32_t>(Privilege::Machine));
+    this->update_privilege(false);
     if ((this->mcause >> 63) == 0) {
         // Store address in mepc
         this->set_csr(static_cast<uint32_t>(CSR::mepc), this->pc);
@@ -570,14 +591,15 @@ processor::processor (memory* main_memory, bool verbose, bool stage2):
     has_breakpoint(false),
     registers({0}),
     main_memory(main_memory),
-    mstatus(0x0000000200000000ULL),
+    mstatus(0x200000000ULL),
     mie(0),
     mtvec(0),
     mscratch(0),
     mepc(0),
     mcause(0),
     mtval(0),
-    mip(0)
+    mip(0),
+    privilege(Privilege::Machine)
 {}
 
 // Display PC value
@@ -632,12 +654,13 @@ void processor::set_prv(unsigned int prv_num)
 {
     // TODO: Error handle incorrect privilege number
     if (prv_num != 0 && prv_num != 3) return;
-    this->mstatus = (this->mstatus & ~(0x3 << 11)) | (prv_num << 11);
+    this->privilege = static_cast<Privilege>(prv_num);
 }
 
 processor::Privilege processor::get_prv()
 {
-    return (this->mstatus >> 11) & 0x3 ? Privilege::Machine : Privilege::User;
+    // This can be inferred from context. But that's too much work for me.
+    return this->privilege;
 }
 
 // Display CSR value
