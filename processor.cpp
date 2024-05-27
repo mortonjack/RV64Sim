@@ -116,11 +116,12 @@ bool take_branch(uint8_t funct3, uint64_t lval, uint64_t rval, bool& illegal_ins
     }
 }
 
-bool processor::load(uint8_t width, size_t dest, size_t base, int64_t offset) {
+void processor::load(uint8_t width, size_t dest, size_t base, int64_t offset) {
     bool has_sign = !(width & 0x4);
     int64_t address = static_cast<int64_t>(this->registers[base]) + offset;
     uint64_t doubleword = this->main_memory->read_doubleword(address);
     uint8_t shift = (static_cast<uint64_t>(address) % 8) * 8;
+    bool misaligned = false;
     switch (width & 0x3) {
         case 0x0: // LB, LBU (1 byte)
             doubleword &= 0x00000000000000ffULL << shift;
@@ -128,49 +129,64 @@ bool processor::load(uint8_t width, size_t dest, size_t base, int64_t offset) {
             if (has_sign) doubleword = static_cast<int64_t>(doubleword << 56) >> 56;
             break;
         case 0x1: // LH, LHU (2 bytes)
-            if (shift != (shift & 48)) return true;
+            misaligned = shift != (shift & 48);
             doubleword &= 0x000000000000ffffULL << shift;
             doubleword >>= shift;
             if (has_sign) doubleword = static_cast<int64_t>(doubleword << 48) >> 48;
             break;
         case 0x2: // LW, LWU (4 bytes)
-            if (shift != (shift & 32)) return true;
+            misaligned = shift != (shift & 32);
             doubleword &= 0x00000000ffffffffULL << shift;
             doubleword >>= shift;
             if (has_sign) doubleword = static_cast<int64_t>(doubleword << 32) >> 32;
             break;
         case 0x3: // LD (8 bytes)
-            if (shift != 0) return true;
+            misaligned = shift != 0;
             break;
     }
-    this->set_reg(dest, doubleword);
-    return false;
+    if (misaligned) {
+        this->set_csr(static_cast<uint32_t>(CSR::mtval), address);
+        this->set_csr(static_cast<uint32_t>(CSR::mcause), 4);
+        --this->instruction_count;
+        this->exception_handler();
+    } else {
+        this->set_reg(dest, doubleword);
+    }
 }
 
-bool processor::store(uint8_t width, size_t src, size_t base, int64_t offset) {
+void processor::store(uint8_t width, size_t src, size_t base, int64_t offset) {
     int64_t address = static_cast<int64_t>(this->registers[base]) + offset;
     uint64_t doubleword = this->registers[src];
     uint64_t mask = 0;
     uint8_t shift = (static_cast<uint64_t>(address) % 8) * 8;
+    bool misaligned = false;
     switch (width & 0x3) {
         case 0x0: // SB
             mask = 0x00000000000000ffULL;
             break;
         case 0x1: // SH
-            if (shift != (shift & 0x30)) return true;
+            misaligned = shift != (shift & 0x30);
             mask = 0x000000000000ffffULL;
             break;
         case 0x2: // SW
-            if (shift != (shift & 0x20)) return true;
+            misaligned = shift != (shift & 0x20);
             mask = 0x00000000ffffffffULL;
             break;
         case 0x3: // SD
-            if (shift != 0) return true;
+            misaligned = shift != 0;
             mask = 0xffffffffffffffffULL;
             break;
     }
-    this->main_memory->write_doubleword(address, doubleword << shift, mask << shift);
-    return false;
+    if (misaligned) {
+        this->set_csr(static_cast<uint32_t>(CSR::mtval), address);
+        this->set_csr(static_cast<uint32_t>(CSR::mcause), 6);
+        --this->instruction_count;
+        this->exception_handler();
+    } else {
+        doubleword <<= shift;
+        mask <<= shift;
+        this->main_memory->write_doubleword(address, doubleword, mask);
+    }
 }
             
 uint64_t op(uint8_t funct7, uint8_t funct3, uint64_t rs1, uint64_t rs2, bool& illegal_instruction) {
@@ -337,12 +353,10 @@ void processor::execute(uint32_t instruction) {
     switch (opcode) {
         case Opcode::LUI: // LUI
             immediate = upper_immediate(instruction);
-            if (this->verbose) std::cout << "Executing LUI instruction, upper immediate " << immediate << std::endl;
             this->set_reg(rd, immediate);
             break;
         case Opcode::AUIPC: // AUIPIC
             immediate = upper_immediate(instruction);
-            if (this->verbose) std::cout << "Executing AUIPC instruction, upper immediate " << immediate << " added to PC " << immediate + this->pc << std::endl;
             immediate += this->pc;
             this->set_reg(rd, immediate);
             break;
@@ -353,13 +367,11 @@ void processor::execute(uint32_t instruction) {
             immediate |= static_cast<int32_t>(instruction & 0x00100000) >> 9;
             immediate |= static_cast<int32_t>(instruction & 0x000ff000);
             // Store return address in rd & update PC
-            if (this->verbose) std::cout << "Executing JAL instruction, immediate " << immediate << " added to PC " << immediate + this->pc << std::endl;
             this->set_reg(rd, this->pc+4);
             this->pc += immediate;
             break;
         case Opcode::JALR: // JALR
             immediate = immediate_11_0(instruction);
-            if (this->verbose) std::cout << "Executing JALR instruction, storing pc " << rd << " and immediate " << immediate << " added to register " << rs1 << ": " << immediate + this->registers[rs1] << std::endl;
             immediate += this->registers[rs1];
             // Store return address in rd & update PC
             this->set_reg(rd, this->pc+4);
@@ -378,12 +390,12 @@ void processor::execute(uint32_t instruction) {
             break;
         case Opcode::LOAD: // LB, LH, LW, LBU, LHU | LWU, LD
             immediate  = static_cast<int32_t>(instruction & 0xfff00000) >> 20;
-            illegal_instruction = this->load(funct3, rd, rs1, immediate);
+            this->load(funct3, rd, rs1, immediate);
             break;
         case Opcode::STORE: // SB, SH, SW | SD
             immediate  = static_cast<int32_t>(instruction & 0xfe000000) >> 20;
             immediate |= static_cast<int32_t>(instruction & 0x00000f80) >> 7;
-            illegal_instruction = this->store(funct3, rs2, rs1, immediate);
+            this->store(funct3, rs2, rs1, immediate);
             break;
         case Opcode::OP_IMM : // ADDI, SLTI, SLTIU, XORI, ORI, ANDI, SLLI, SRLI, SRAI | SLLI, SRLI, SRAI
             immediate = static_cast<int32_t>(instruction & 0xfff00000) >> 20;
@@ -413,9 +425,6 @@ void processor::execute(uint32_t instruction) {
             illegal_instruction = this->system(immediate, rs1, rd, funct3);
             break;
         default:
-            if (this->verbose) {
-                std::cout << "Malformed opcode 0x" << std::setw(2) << std::setfill('0') << std::hex << static_cast<uint16_t>(opcode) << std::endl;
-            }
             illegal_instruction = true;
             break;
     }
@@ -464,12 +473,14 @@ bool processor::system(uint32_t csr, size_t src, size_t dest, uint8_t funct3) {
                     this->set_csr(static_cast<uint32_t>(CSR::mcause), 8);
                     break;
             }
+            --this->instruction_count;
             this->exception_handler();
             break;
         case Op_Type::EBREAK:
             // Causes breakpoint exception
             this->set_csr(static_cast<uint32_t>(CSR::mcause), 3);
             this->set_csr(static_cast<uint32_t>(CSR::mtval), this->pc);
+            --this->instruction_count;
             this->exception_handler();
             break;
         case Op_Type::MRET:
@@ -511,6 +522,7 @@ bool processor::system(uint32_t csr, size_t src, size_t dest, uint8_t funct3) {
 
 void processor::exception_handler() {
     if ((this->mcause >> 63) == 0) {
+        // Store address in mepc
         this->set_csr(static_cast<uint32_t>(CSR::mepc), this->pc);
     }
     uint64_t base = this->mtvec >> 2;
@@ -541,7 +553,7 @@ processor::processor (memory* main_memory, bool verbose, bool stage2):
     mtval(0),
     mip(0)
 {
-    this->set_prv(3);
+    this->set_prv(static_cast<uint32_t>(Privilege::Machine));
 }
 
 // Display PC value
