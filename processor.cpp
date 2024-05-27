@@ -128,18 +128,19 @@ bool processor::load(uint8_t width, size_t dest, size_t base, int64_t offset) {
             if (has_sign) doubleword = static_cast<int64_t>(doubleword << 56) >> 56;
             break;
         case 0x1: // LH, LHU (2 bytes)
-            shift &= 48;
+            if (shift != (shift & 48)) return true;
             doubleword &= 0x000000000000ffffULL << shift;
             doubleword >>= shift;
             if (has_sign) doubleword = static_cast<int64_t>(doubleword << 48) >> 48;
             break;
         case 0x2: // LW, LWU (4 bytes)
-            shift &= 32;
+            if (shift != (shift & 32)) return true;
             doubleword &= 0x00000000ffffffffULL << shift;
             doubleword >>= shift;
             if (has_sign) doubleword = static_cast<int64_t>(doubleword << 32) >> 32;
             break;
         case 0x3: // LD (8 bytes)
+            if (shift != 0) return true;
             break;
     }
     this->set_reg(dest, doubleword);
@@ -156,15 +157,15 @@ bool processor::store(uint8_t width, size_t src, size_t base, int64_t offset) {
             mask = 0x00000000000000ffULL;
             break;
         case 0x1: // SH
-            shift &= 0x30;
+            if (shift != (shift & 0x30)) return true;
             mask = 0x000000000000ffffULL;
             break;
         case 0x2: // SW
-            shift &= 0x20;
+            if (shift != (shift & 0x20)) return true;
             mask = 0x00000000ffffffffULL;
             break;
         case 0x3: // SD
-            shift = 0;
+            if (shift != 0) return true;
             mask = 0xffffffffffffffffULL;
             break;
     }
@@ -174,6 +175,7 @@ bool processor::store(uint8_t width, size_t src, size_t base, int64_t offset) {
             
 uint64_t op(uint8_t funct7, uint8_t funct3, uint64_t rs1, uint64_t rs2, bool& illegal_instruction) {
     // Note: funct7 only has two possible values, 0b0100000 and 0
+    if (funct7 != 0 && funct7 != 0x20) illegal_instruction = true;
     enum class Op_Type : uint8_t {
         ADD     =   0x00, // 0b00 ... 000
         SUB     =   0x20, // 0b01 ... 000
@@ -220,17 +222,31 @@ uint64_t op_imm(uint8_t funct3, uint64_t rs1, uint64_t immediate, bool& illegal_
     Op_Type op_type = static_cast<Op_Type>(funct3);
     uint8_t shamt = immediate & 0x3f;
     int64_t ri1 = rs1, i_imm = immediate;
-    if (op_type == Op_Type::SRLI && (immediate & 0x400)) op_type = Op_Type::SRAI;
+    if (op_type == Op_Type::SRLI && (immediate >> 6) == 0x10) {
+        op_type = Op_Type::SRAI;
+    }
     switch (op_type) {
-        case Op_Type::ADDI:  return rs1 +  immediate;
-        case Op_Type::XORI:  return rs1 ^  immediate;
-        case Op_Type::ORI:   return rs1 |  immediate;
-        case Op_Type::ANDI:  return rs1 &  immediate;
-        case Op_Type::SLLI:  return rs1 << shamt;
-        case Op_Type::SRLI:  return rs1 >> shamt;
-        case Op_Type::SRAI:  return ri1 >> shamt;
-        case Op_Type::SLTI:  return ri1 <  i_imm     ? 1 : 0;
-        case Op_Type::SLTIU: return rs1 <  immediate ? 1 : 0;
+        case Op_Type::ADDI:
+            return rs1 + immediate;
+        case Op_Type::XORI:
+            return rs1 ^ immediate;
+        case Op_Type::ORI:
+            return rs1 | immediate;
+        case Op_Type::ANDI:
+            return rs1 & immediate;
+        case Op_Type::SLLI:
+            illegal_instruction = (immediate >> 6) != 0;
+            return rs1 << shamt;
+        case Op_Type::SRLI:
+            illegal_instruction = (immediate >> 6) != 0;
+            return rs1 >> shamt;
+        case Op_Type::SRAI:
+            illegal_instruction = (immediate >> 6) != 0x10;
+            return ri1 >> shamt;
+        case Op_Type::SLTI:
+            return ri1 < i_imm ? 1 : 0;
+        case Op_Type::SLTIU:
+            return rs1 < immediate ? 1 : 0;
         default: 
             illegal_instruction = true;
             return 0;
@@ -245,15 +261,24 @@ uint64_t op_imm_32(uint8_t funct3, uint64_t rs1, uint64_t immediate, bool& illeg
         SRAIW   =   0x08, // custom - SRLIW & immediate[10]
     };
     Op_Type op_type = static_cast<Op_Type>(funct3);
-    if (op_type == Op_Type::SRLIW && (immediate & 0x400)) op_type = Op_Type::SRAIW;
+    if (op_type == Op_Type::SRLIW && (immediate >> 5) == 0x20) {
+        op_type = Op_Type::SRAIW;
+    }
     uint8_t shamt = immediate & 0x1f;
     int32_t ri1 = rs1, i_imm = immediate;
     uint32_t ru1 = rs1;
     switch (op_type) {
-        case Op_Type::ADDIW: return static_cast<int64_t>(static_cast<int32_t>(ri1 + i_imm));
-        case Op_Type::SLLIW: return static_cast<int64_t>(static_cast<int32_t>(ri1 << shamt));
-        case Op_Type::SRLIW: return static_cast<int64_t>(static_cast<int32_t>(ru1 >> shamt));
-        case Op_Type::SRAIW: return static_cast<int64_t>(static_cast<int32_t>(ri1 >> shamt));
+        case Op_Type::ADDIW:
+            return static_cast<int64_t>(static_cast<int32_t>(ri1 + i_imm));
+        case Op_Type::SLLIW:
+            illegal_instruction = (immediate >> 5) != 0;
+            return static_cast<int64_t>(static_cast<int32_t>(ri1 << shamt));
+        case Op_Type::SRLIW:
+            illegal_instruction = (immediate >> 5) != 0;
+            return static_cast<int64_t>(static_cast<int32_t>(ru1 >> shamt));
+        case Op_Type::SRAIW:
+            illegal_instruction = (immediate >> 5) != 0x20;
+            return static_cast<int64_t>(static_cast<int32_t>(ri1 >> shamt));
         default: 
             illegal_instruction = true;
             return 0;
@@ -347,6 +372,7 @@ void processor::execute(uint32_t instruction) {
             immediate |= static_cast<int32_t>(instruction & 0x00000f00) >> 7;
             immediate |= static_cast<int32_t>(instruction & 0x00000080) << 4;
             if (take_branch(funct3, this->registers[rs1], this->registers[rs2], illegal_instruction)) {
+                if (illegal_instruction) break;
                 this->pc += static_cast<uint64_t>(immediate);
             }
             break;
@@ -360,18 +386,25 @@ void processor::execute(uint32_t instruction) {
             illegal_instruction = this->store(funct3, rs2, rs1, immediate);
             break;
         case Opcode::OP_IMM : // ADDI, SLTI, SLTIU, XORI, ORI, ANDI, SLLI, SRLI, SRAI | SLLI, SRLI, SRAI
-            immediate  = static_cast<int32_t>(instruction & 0xfff00000) >> 20;
-            this->set_reg(rd, op_imm(funct3, this->registers[rs1], immediate, illegal_instruction));
+            immediate = static_cast<int32_t>(instruction & 0xfff00000) >> 20;
+            immediate = op_imm(funct3, this->registers[rs1], immediate, illegal_instruction);
+            if (illegal_instruction) break;
+            this->set_reg(rd, immediate);
             break;
         case Opcode::OP: // ADD, SUB, SLL, SLT, SLTU, XOR, SRL, SRA, OR, AND
-            this->set_reg(rd, op(funct7, funct3, this->registers[rs1], this->registers[rs2], illegal_instruction));
+            immediate = op(funct7, funct3, this->registers[rs1], this->registers[rs2], illegal_instruction);
+            if (illegal_instruction) break;
+            this->set_reg(rd, immediate);
             break;
         case Opcode::OP_IMM32: // ADDIW, SLLIW, SRLIW, SRAIW
-            immediate  = static_cast<int32_t>(instruction & 0xfff00000) >> 20;
-            this->set_reg(rd, op_imm_32(funct3, this->registers[rs1], immediate, illegal_instruction));
+            immediate = static_cast<int32_t>(instruction & 0xfff00000) >> 20;
+            immediate = op_imm_32(funct3, this->registers[rs1], immediate, illegal_instruction);
+            if (illegal_instruction) break;
+            this->set_reg(rd, immediate);
             break;
         case Opcode::OP_32: // ADDW, SUBW, SLLW, SRLW, SRAW
-            this->set_reg(rd, op_32(funct7, funct3, this->registers[rs1], this->registers[rs2], illegal_instruction));
+            immediate = op_32(funct7, funct3, this->registers[rs1], this->registers[rs2], illegal_instruction);
+            this->set_reg(rd, immediate);
             break;
         case Opcode::MISC_MEM: // FENCE
             break;
@@ -425,22 +458,28 @@ bool processor::system(uint32_t csr, size_t src, size_t dest, uint8_t funct3) {
             // Causes environment-call-from-?-mode-exception
             switch (this->get_prv()) {
                 case Privilege::Machine:
-                    this->mcause = 11;
+                    this->set_csr(static_cast<uint32_t>(CSR::mcause), 11);
                     break;
                 case Privilege::User:
-                    this->mcause = 8;
+                    this->set_csr(static_cast<uint32_t>(CSR::mcause), 8);
                     break;
             }
             this->exception_handler();
             break;
         case Op_Type::EBREAK:
             // Causes breakpoint exception
-            this->mcause = 3;
-            this->mtval = this->pc;
+            this->set_csr(static_cast<uint32_t>(CSR::mcause), 3);
+            this->set_csr(static_cast<uint32_t>(CSR::mtval), this->pc);
             this->exception_handler();
             break;
         case Op_Type::MRET:
             // Requires M privilege, sets pc to value in mepc register
+            switch (this->get_prv()) {
+                case Privilege::Machine:
+                    this->pc = this->read_csr(static_cast<uint32_t>(CSR::mepc));
+                default:
+                    return true;
+            }
             break;
         case Op_Type::CSRRW:
             this->set_reg(dest, csr_val);
@@ -569,7 +608,11 @@ processor::Privilege processor::get_prv()
 // Empty implementation for stage 1, required for stage 2
 void processor::show_csr(unsigned int csr_num)
 {
-    std::cout << std::setw(16) << std::setfill('0') << std::hex << this->read_csr(csr_num) << '\n';
+    if (valid_csr(csr_num)) {
+        std::cout << std::setw(16) << std::setfill('0') << std::hex << this->read_csr(csr_num) << '\n';
+    } else {
+        std::cout << "Illegal CSR number" << std::endl;
+    }
 }
 
 // Set CSR to new value
@@ -600,7 +643,6 @@ void processor::set_csr(unsigned int csr_num, uint64_t new_value)
             this->mstatus = (new_value & mask) | fixed;
             break;
         case CSR::misa:
-            std::cout << "Legal write to read-only CSR" << std::endl;
             // Legal to write to, but value remains fixed
             break;
         case CSR::mie:
