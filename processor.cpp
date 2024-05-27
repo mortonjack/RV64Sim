@@ -545,6 +545,8 @@ bool processor::system(uint32_t csr, size_t src, size_t dest, uint8_t funct3) {
 }
 
 void processor::exception_handler() {
+    // Set privilege to machine mode
+    this->set_prv(static_cast<uint32_t>(Privilege::Machine));
     if ((this->mcause >> 63) == 0) {
         // Store address in mepc
         this->set_csr(static_cast<uint32_t>(CSR::mepc), this->pc);
@@ -576,9 +578,7 @@ processor::processor (memory* main_memory, bool verbose, bool stage2):
     mcause(0),
     mtval(0),
     mip(0)
-{
-    this->set_prv(static_cast<uint32_t>(Privilege::Machine));
-}
+{}
 
 // Display PC value
 void processor::show_pc() {
@@ -672,9 +672,9 @@ void processor::set_csr(unsigned int csr_num, uint64_t new_value)
             // mie, mpie, mpp implemented
             // uxl fixed at 2
             // all others fixed at 0
-            mask    = 0x200001888ULL;
+            fixed   = 2ULL << 32ULL;
+            mask    = 0x1888ULL | fixed;
             //mask  = 0b1000000000000000000001100010001000ULL;
-            fixed   = 0x200000000ULL;
             //fixed = 0b1000000000000000000000000000000000ULL;
             this->mstatus = (new_value & mask) | fixed;
             break;
