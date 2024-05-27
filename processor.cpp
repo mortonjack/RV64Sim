@@ -75,8 +75,10 @@ void processor::execute(unsigned int num, bool breakpoint_check) {
             break;
         }
         if (this->pc & 0x3) {
-            std::cout << "Error: misaligned pc" << std::endl;
-            break;
+            this->set_csr(static_cast<uint32_t>(CSR::mtval), this->pc);
+            this->set_csr(static_cast<uint32_t>(CSR::mcause), 0);
+            this->exception_handler();
+            continue;
         }
 
         // Fetch
@@ -473,6 +475,7 @@ bool processor::system(uint32_t csr, size_t src, size_t dest, uint8_t funct3) {
                     this->set_csr(static_cast<uint32_t>(CSR::mcause), 8);
                     break;
             }
+            this->set_csr(static_cast<uint32_t>(CSR::mtval), 0);
             --this->instruction_count;
             this->exception_handler();
             break;
