@@ -8,6 +8,7 @@
 
 #include <iostream>
 #include <iomanip> 
+#include <array>
 #include "memory.h"
 #include "processor.h"
 
@@ -74,14 +75,34 @@ void processor::execute(unsigned int num, bool breakpoint_check) {
             std::cout << "Breakpoint reached at " << std::setw(16) << std::setfill('0') << std::hex << this->pc << std::endl;
             break;
         }
+        
+        // Check interrupts
+        if (this->mstatus & 0x8) {
+            // mip.usip && mie.usie -> cause code 0, bitfield 0
+            // mip.msip && mie.msie -> cause code 3, bitfield 3
+            // mip.utip && mie.utie -> cause code 4, bitfield 4
+            // mip.mtip && mie.mtie -> cause code 7, bitfield 7
+            // mip.ueip && mie.ueie -> cause code 8, bitfield 8
+            // mip.meip && mie.meie -> cause code 11, bitfield 11
+            const std::array<uint8_t, 6> interrupt_bits = {0, 3, 4, 7, 8, 11};
+            for (uint64_t bit: interrupt_bits) {
+                if (((this->mip >> bit) & 1ULL) && ((this->mie >> bit) & 1ULL)) {
+                    uint64_t cause = (1ULL << 63ULL) | bit;
+                    this->set_csr(static_cast<uint32_t>(CSR::mtval), 0);
+                    this->set_csr(static_cast<uint32_t>(CSR::mcause), cause);
+                    this->exception_handler();
+                    continue;
+                }
+            }
+        }
+
+        // Fetch
         if (this->pc & 0x3) {
             this->set_csr(static_cast<uint32_t>(CSR::mtval), this->pc);
             this->set_csr(static_cast<uint32_t>(CSR::mcause), 0);
             this->exception_handler();
             continue;
         }
-
-        // Fetch
         uint32_t instruction = this->fetch();
         uint64_t original_pc = this->pc;
         
@@ -528,7 +549,7 @@ void processor::exception_handler() {
         // Store address in mepc
         this->set_csr(static_cast<uint32_t>(CSR::mepc), this->pc);
     }
-    uint64_t base = this->mtvec >> 2;
+    uint64_t base = this->mtvec & ~0x3ULL;
     if (this->mtvec & 1) {
         // Vectored mode
         uint64_t cause = this->mcause << 2;
@@ -547,7 +568,7 @@ processor::processor (memory* main_memory, bool verbose, bool stage2):
     has_breakpoint(false),
     registers({0}),
     main_memory(main_memory),
-    mstatus(0),
+    mstatus(0x0000000200000000ULL),
     mie(0),
     mtvec(0),
     mscratch(0),
@@ -702,23 +723,22 @@ void processor::set_csr(unsigned int csr_num, uint64_t new_value)
 uint64_t processor::read_csr(uint32_t csr) {
     switch (static_cast<CSR>(csr)) {
         case CSR::mvendorid:
-            return 0LL;
+            return 0ULL;
             break;
         case CSR::marchid:
-            return 0LL;
+            return 0ULL;
             break;
         case CSR::mimpid:
-            // TODO: Replace 2018 with 2024!
-            return 0x2018020000000000LL;
+            return 0x2024020000000000ULL;
             break;
         case CSR::mhartid:
-            return 0LL;
+            return 0ULL;
             break;
         case CSR::mstatus:
             return this->mstatus;
             break;
         case CSR::misa:
-            return 0x8000000000100100LL;
+            return 0x8000000000100100ULL;
             break;
         case CSR::mie:
             return this->mie;
@@ -742,7 +762,7 @@ uint64_t processor::read_csr(uint32_t csr) {
             return this->mip;
             break;
         default:
-            return 0;
+            return 0ULL;
     };
 }
 
