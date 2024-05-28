@@ -77,7 +77,7 @@ void processor::execute(unsigned int num, bool breakpoint_check) {
         }
         
         // Check interrupts
-        if (this->mstatus & 0x8) {
+        if ((this->mstatus & 0x8) || this->privilege == Privilege::User) {
             // mip.usip && mie.usie -> cause code 0, bitfield 0
             // mip.msip && mie.msie -> cause code 3, bitfield 3
             // mip.utip && mie.utie -> cause code 4, bitfield 4
@@ -90,7 +90,6 @@ void processor::execute(unsigned int num, bool breakpoint_check) {
                     uint64_t cause = (1ULL << 63ULL) | bit;
                     this->set_csr(static_cast<uint32_t>(CSR::mtval), 0);
                     this->set_csr(static_cast<uint32_t>(CSR::mcause), cause);
-                    this->set_csr(static_cast<uint32_t>(CSR::mepc), this->pc);
                     this->exception_handler();
                     continue;
                 }
@@ -590,10 +589,8 @@ void processor::update_privilege(bool mret) {
 void processor::exception_handler() {
     // Set privilege to machine mode
     this->update_privilege(false);
-    if ((this->mcause >> 63) == 0) {
-        // Store address in mepc
-        this->set_csr(static_cast<uint32_t>(CSR::mepc), this->pc);
-    }
+    // Store address in mepc
+    this->set_csr(static_cast<uint32_t>(CSR::mepc), this->pc);
     uint64_t base = this->mtvec & ~0x3ULL;
     if (this->mtvec & 1) {
         // Vectored mode
