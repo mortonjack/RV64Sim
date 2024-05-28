@@ -454,6 +454,7 @@ void processor::execute(uint32_t instruction) {
     if (illegal_instruction) {
         this->set_csr(static_cast<uint32_t>(CSR::mtval), instruction);
         this->set_csr(static_cast<uint32_t>(CSR::mcause), 2);
+        --this->instruction_count;
         this->exception_handler();
     }
 }
@@ -475,16 +476,25 @@ bool processor::system(uint32_t csr, size_t src, size_t dest, uint8_t funct3) {
         CSRRSI  =   0x06,
         CSRRCI  =   0x07,
     };
-    if (funct3 != 0 && !valid_csr(csr)) {
-        return true;
-    }
+    if (funct3 != 0 && !valid_csr(csr)) return true;
+    auto read_only_csr = [](uint32_t csr){
+        switch (static_cast<CSR>(csr)) {
+            case CSR::mvendorid:
+            case CSR::marchid:
+            case CSR::mimpid:
+            case CSR::mhartid:
+                return true;
+            default:
+                return false;
+        }
+    };
     Op_Type op = static_cast<Op_Type>(funct3);
     if (op == Op_Type::ECALL && csr == 1) op = Op_Type::EBREAK;
     if (op == Op_Type::ECALL && csr == 0x302) op = Op_Type::MRET;
     if (op == Op_Type::ECALL && csr != 0) return true;
     uint64_t rs1 = this->registers[src];
     uint64_t csr_val = this->read_csr(csr);
-    uint64_t imm = src;
+    uint64_t uimm = src;
     switch (op) {
         case Op_Type::ECALL:
             // Causes environment-call-from-?-mode-exception
@@ -518,28 +528,34 @@ bool processor::system(uint32_t csr, size_t src, size_t dest, uint8_t funct3) {
             }
             break;
         case Op_Type::CSRRW:
+            if (read_only_csr(csr)) return true;
             this->set_reg(dest, csr_val);
             this->set_csr(csr, rs1);
             break;
         case Op_Type::CSRRS:
+            if (src != 0 && read_only_csr(csr)) return true;
             this->set_reg(dest, csr_val);
-            this->set_csr(csr, csr_val | rs1);
+            if (src != 0) this->set_csr(csr, csr_val | rs1);
             break;
         case Op_Type::CSRRC:
+            if (src != 0 && read_only_csr(csr)) return true;
             this->set_reg(dest, csr_val);
-            this->set_csr(csr, csr_val & ~rs1);
+            if (src != 0) this->set_csr(csr, csr_val & ~rs1);
             break;
         case Op_Type::CSRRWI:
+            if (read_only_csr(csr)) return true;
             this->set_reg(dest, csr_val);
-            this->set_csr(csr, imm);
+            this->set_csr(csr, uimm);
             break;
         case Op_Type::CSRRSI:
+            if (uimm != 0 && read_only_csr(csr)) return true;
             this->set_reg(dest, csr_val);
-            this->set_csr(csr, csr_val | imm);
+            if (uimm != 0) this->set_csr(csr, csr_val | uimm);
             break;
         case Op_Type::CSRRCI:
+            if (uimm != 0 && read_only_csr(csr)) return true;
             this->set_reg(dest, csr_val);
-            this->set_csr(csr, csr_val & ~imm);
+            if (uimm != 0) this->set_csr(csr, csr_val & ~uimm);
             break;
     }
     return false;
