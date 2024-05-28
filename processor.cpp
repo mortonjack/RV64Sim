@@ -591,7 +591,7 @@ void processor::exception_handler() {
     uint64_t base = this->mtvec & ~0x3ULL;
     if (this->mtvec & 1) {
         // Vectored mode
-        uint64_t cause = this->mcause << 2;
+        uint64_t cause = this->mcause == 3 ? 0 : this->mcause << 2;
         this->pc = base + cause;
     } else {
         // Direct mode
