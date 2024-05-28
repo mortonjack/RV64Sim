@@ -476,7 +476,11 @@ bool processor::system(uint32_t csr, size_t src, size_t dest, uint8_t funct3) {
         CSRRSI  =   0x06,
         CSRRCI  =   0x07,
     };
-    if (funct3 != 0 && !valid_csr(csr)) return true;
+    if (funct3 != 0) {
+        // CSR* calls
+        if (!valid_csr(csr)) return true;
+        if (this->privilege != Privilege::Machine) return true;
+    }
     auto read_only_csr = [](uint32_t csr){
         switch (static_cast<CSR>(csr)) {
             case CSR::mvendorid:
