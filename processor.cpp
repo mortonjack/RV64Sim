@@ -90,6 +90,7 @@ void processor::execute(unsigned int num, bool breakpoint_check) {
                     uint64_t cause = (1ULL << 63ULL) | bit;
                     this->set_csr(static_cast<uint32_t>(CSR::mtval), 0);
                     this->set_csr(static_cast<uint32_t>(CSR::mcause), cause);
+                    this->set_csr(static_cast<uint32_t>(CSR::mepc), this->pc);
                     this->exception_handler();
                     continue;
                 }
@@ -527,6 +528,7 @@ bool processor::system(uint32_t csr, size_t src, size_t dest, uint8_t funct3) {
                 case Privilege::Machine:
                     this->pc = this->read_csr(static_cast<uint32_t>(CSR::mepc));
                     this->update_privilege(true);
+                    break;
                 default:
                     return true;
             }
