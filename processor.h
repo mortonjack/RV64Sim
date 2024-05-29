@@ -13,9 +13,24 @@
 #include <array>
 
 class processor {
+public:
+  enum class CSR : uint32_t {
+    mvendorid   = 0xF11, // MRO
+    marchid     = 0xF12,
+    mimpid      = 0xF13,
+    mhartid     = 0xF14,
+    mstatus     = 0x300, // MRW
+    misa        = 0x301,
+    mie         = 0x304,
+    mtvec       = 0x305,
+    mscratch    = 0x340,
+    mepc        = 0x341,
+    mcause      = 0x342,
+    mtval       = 0x343,
+    mip         = 0x344,
+  };
 
- private:
-
+private:
   bool verbose;
 
   uint64_t instruction_count;
@@ -24,9 +39,9 @@ class processor {
   bool has_breakpoint;
   uint64_t breakpoint;
   std::array<uint64_t, 32> registers;
-  
+
   // We do not have ownership over this object! Do not free it!
-  memory* main_memory;
+  memory *main_memory;
 
   // Control and Status Registers
   uint64_t mstatus;
@@ -39,7 +54,7 @@ class processor {
   uint64_t mip;
 
   // use uint16_t or cout will try to print a char
-  enum class Privilege: uint16_t {
+  enum class Privilege : uint16_t {
     User = 0,
     Machine = 3,
   };
@@ -55,11 +70,11 @@ class processor {
   void update_privilege(bool mret);
   Privilege get_prv();
   uint64_t read_csr(uint32_t csr);
+  void write_csr(CSR csr, uint64_t new_value);
 
- public:
-
+public:
   // Consructor
-  processor(memory* main_memory, bool verbose, bool stage2);
+  processor(memory *main_memory, bool verbose, bool stage2);
 
   // Display PC value
   void show_pc();
@@ -102,7 +117,6 @@ class processor {
 
   // Used for Postgraduate assignment. Undergraduate assignment can return 0.
   uint64_t get_cycle_count();
-
 };
 
 #endif

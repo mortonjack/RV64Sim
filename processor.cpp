@@ -12,6 +12,8 @@
 #include "memory.h"
 #include "processor.h"
 
+using CSR = processor::CSR;
+
 constexpr uint64_t upper32(uint64_t doubleword) {
     return 0xffffffff00000000ULL & doubleword;
 }
@@ -27,22 +29,6 @@ constexpr int64_t upper_immediate(uint32_t instruction) {
 constexpr int64_t immediate_11_0(uint32_t instruction) {
     return static_cast<int32_t>(instruction & 0xfff00000) >> 20;
 }
-
-enum class CSR: uint32_t {
-    mvendorid   =   0xF11, // MRO
-    marchid     =   0xF12,
-    mimpid      =   0xF13,
-    mhartid     =   0xF14,
-    mstatus     =   0x300, // MRW
-    misa        =   0x301,
-    mie         =   0x304,
-    mtvec       =   0x305,
-    mscratch    =   0x340,
-    mepc        =   0x341,
-    mcause      =   0x342,
-    mtval       =   0x343,
-    mip         =   0x344,
-};
 
 bool valid_csr(uint32_t csr_num) {
     switch (static_cast<CSR>(csr_num)) {
@@ -88,8 +74,8 @@ void processor::execute(unsigned int num, bool breakpoint_check) {
             for (uint64_t bit: interrupt_bits) {
                 if (((this->mip >> bit) & 1ULL) && ((this->mie >> bit) & 1ULL)) {
                     uint64_t cause = (1ULL << 63ULL) | bit;
-                    this->set_csr(static_cast<uint32_t>(CSR::mtval), 0);
-                    this->set_csr(static_cast<uint32_t>(CSR::mcause), cause);
+                    this->write_csr(CSR::mtval, 0);
+                    this->write_csr(CSR::mcause, cause);
                     this->exception_handler();
                     continue;
                 }
@@ -98,8 +84,8 @@ void processor::execute(unsigned int num, bool breakpoint_check) {
 
         // Fetch
         if (this->pc & 0x3) {
-            this->set_csr(static_cast<uint32_t>(CSR::mtval), this->pc);
-            this->set_csr(static_cast<uint32_t>(CSR::mcause), 0);
+            this->write_csr(CSR::mtval, this->pc);
+            this->write_csr(CSR::mcause, 0);
             this->exception_handler();
             continue;
         }
@@ -168,8 +154,8 @@ void processor::load(uint8_t width, size_t dest, size_t base, int64_t offset) {
             break;
     }
     if (misaligned) {
-        this->set_csr(static_cast<uint32_t>(CSR::mtval), address);
-        this->set_csr(static_cast<uint32_t>(CSR::mcause), 4);
+        this->write_csr(CSR::mtval, address);
+        this->write_csr(CSR::mcause, 4);
         --this->instruction_count;
         this->exception_handler();
     } else {
@@ -201,8 +187,8 @@ void processor::store(uint8_t width, size_t src, size_t base, int64_t offset) {
             break;
     }
     if (misaligned) {
-        this->set_csr(static_cast<uint32_t>(CSR::mtval), address);
-        this->set_csr(static_cast<uint32_t>(CSR::mcause), 6);
+        this->write_csr(CSR::mtval, address);
+        this->write_csr(CSR::mcause, 6);
         --this->instruction_count;
         this->exception_handler();
     } else {
@@ -452,8 +438,8 @@ void processor::execute(uint32_t instruction) {
             break;
     }
     if (illegal_instruction) {
-        this->set_csr(static_cast<uint32_t>(CSR::mtval), instruction);
-        this->set_csr(static_cast<uint32_t>(CSR::mcause), 2);
+        this->write_csr(CSR::mtval, instruction);
+        this->write_csr(CSR::mcause, 2);
         --this->instruction_count;
         this->exception_handler();
     }
@@ -481,8 +467,8 @@ bool processor::system(uint32_t csr, size_t src, size_t dest, uint8_t funct3) {
         if (!valid_csr(csr)) return true;
         if (this->privilege != Privilege::Machine) return true;
     }
-    auto read_only_csr = [](uint32_t csr){
-        switch (static_cast<CSR>(csr)) {
+    auto read_only_csr = [](CSR csr){
+        switch (csr) {
             case CSR::mvendorid:
             case CSR::marchid:
             case CSR::mimpid:
@@ -499,25 +485,26 @@ bool processor::system(uint32_t csr, size_t src, size_t dest, uint8_t funct3) {
     uint64_t rs1 = this->registers[src];
     uint64_t csr_val = this->read_csr(csr);
     uint64_t uimm = src;
+    CSR csr_encoded = static_cast<CSR>(csr);
     switch (op) {
         case Op_Type::ECALL:
             // Causes environment-call-from-?-mode-exception
             switch (this->get_prv()) {
                 case Privilege::Machine:
-                    this->set_csr(static_cast<uint32_t>(CSR::mcause), 11);
+                    this->write_csr(CSR::mcause, 11);
                     break;
                 case Privilege::User:
-                    this->set_csr(static_cast<uint32_t>(CSR::mcause), 8);
+                    this->write_csr(CSR::mcause, 8);
                     break;
             }
-            this->set_csr(static_cast<uint32_t>(CSR::mtval), 0);
+            this->write_csr(CSR::mtval, 0);
             --this->instruction_count;
             this->exception_handler();
             break;
         case Op_Type::EBREAK:
             // Causes breakpoint exception
-            this->set_csr(static_cast<uint32_t>(CSR::mcause), 3);
-            this->set_csr(static_cast<uint32_t>(CSR::mtval), this->pc);
+            this->write_csr(CSR::mcause, 3);
+            this->write_csr(CSR::mtval, this->pc);
             --this->instruction_count;
             this->exception_handler();
             break;
@@ -533,34 +520,34 @@ bool processor::system(uint32_t csr, size_t src, size_t dest, uint8_t funct3) {
             }
             break;
         case Op_Type::CSRRW:
-            if (read_only_csr(csr)) return true;
+            if (read_only_csr(csr_encoded)) return true;
             this->set_reg(dest, csr_val);
-            this->set_csr(csr, rs1);
+            this->write_csr(csr_encoded, rs1);
             break;
         case Op_Type::CSRRS:
-            if (src != 0 && read_only_csr(csr)) return true;
+            if (src != 0 && read_only_csr(csr_encoded)) return true;
             this->set_reg(dest, csr_val);
-            if (src != 0) this->set_csr(csr, csr_val | rs1);
+            if (src != 0) this->write_csr(csr_encoded, csr_val | rs1);
             break;
         case Op_Type::CSRRC:
-            if (src != 0 && read_only_csr(csr)) return true;
+            if (src != 0 && read_only_csr(csr_encoded)) return true;
             this->set_reg(dest, csr_val);
-            if (src != 0) this->set_csr(csr, csr_val & ~rs1);
+            if (src != 0) this->write_csr(csr_encoded, csr_val & ~rs1);
             break;
         case Op_Type::CSRRWI:
-            if (read_only_csr(csr)) return true;
+            if (read_only_csr(csr_encoded)) return true;
             this->set_reg(dest, csr_val);
-            this->set_csr(csr, uimm);
+            this->write_csr(csr_encoded, uimm);
             break;
         case Op_Type::CSRRSI:
-            if (uimm != 0 && read_only_csr(csr)) return true;
+            if (uimm != 0 && read_only_csr(csr_encoded)) return true;
             this->set_reg(dest, csr_val);
-            if (uimm != 0) this->set_csr(csr, csr_val | uimm);
+            if (uimm != 0) this->write_csr(csr_encoded, csr_val | uimm);
             break;
         case Op_Type::CSRRCI:
-            if (uimm != 0 && read_only_csr(csr)) return true;
+            if (uimm != 0 && read_only_csr(csr_encoded)) return true;
             this->set_reg(dest, csr_val);
-            if (uimm != 0) this->set_csr(csr, csr_val & ~uimm);
+            if (uimm != 0) this->write_csr(csr_encoded, csr_val & ~uimm);
             break;
     }
     return false;
@@ -583,14 +570,14 @@ void processor::update_privilege(bool mret) {
         this->privilege = Privilege::Machine;
     }
     l_mstatus = (mpp << 11) | (mie << 3) | (mpie << 7);
-    this->set_csr(static_cast<uint32_t>(CSR::mstatus), l_mstatus);
+    this->write_csr(CSR::mstatus, l_mstatus);
 }
 
 void processor::exception_handler() {
     // Set privilege to machine mode
     this->update_privilege(false);
     // Store address in mepc
-    this->set_csr(static_cast<uint32_t>(CSR::mepc), this->pc);
+    this->write_csr(CSR::mepc, this->pc);
     uint64_t base = this->mtvec & ~0x3ULL;
     if (this->mtvec & 1) {
         // Vectored mode
@@ -693,6 +680,18 @@ void processor::show_csr(unsigned int csr_num)
     }
 }
 
+void processor::write_csr(CSR csr, uint64_t new_value) {
+    // Mask inputs
+    switch (csr) {
+        case CSR::mip:
+            new_value = (new_value & 0x111ULL) | (this->mip & 0x888ULL);
+            break;
+        default:
+            break;
+    }
+    this->set_csr(static_cast<uint32_t>(csr), new_value);
+}
+
 // Set CSR to new value
 // Empty implementation for stage 1, required for stage 2
 void processor::set_csr(unsigned int csr_num, uint64_t new_value) 
@@ -755,7 +754,7 @@ void processor::set_csr(unsigned int csr_num, uint64_t new_value)
         case CSR::mip:
             // usip, msip, utip, mtip, ueip, meip implemented
             // all others fixed at 0
-            mask    = 0x999ULL;
+            mask  = 0x999ULL;
             //mask  = 0b100110011001ULL;
             this->mip = new_value & mask;
             break;
