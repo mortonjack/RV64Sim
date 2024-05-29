@@ -2,7 +2,7 @@
 
 csr 305 = 4000  # mtvec, direct mode
 
-m 2000 = F130A173  # csrrs x2, x1, mimpid
+m 2000 = F130A173  # csrrs x2, mimpid, x1
 
 x1 = 00000000FFFFFFFF
 x2 = 0202020202020202

@@ -2,7 +2,7 @@
 
 csr f11	  # mvendorid, expect 0000000000000000
 csr F12   # marchid, expect 0000000000000000
-csr F13   # mimpid, expect 2020020000000000
+csr F13   # mimpid, expect 20yy020000000000
 csr F14   # mhartid, expect 0000000000000000
 csr 300   # mstatus, expect 0000000200000000
 csr 301   # misa, expect 8000000000100100
