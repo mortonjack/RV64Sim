@@ -70,14 +70,14 @@ void processor::execute(unsigned int num, bool breakpoint_check) {
             // mip.mtip && mie.mtie -> cause code 7, bitfield 7
             // mip.ueip && mie.ueie -> cause code 8, bitfield 8
             // mip.meip && mie.meie -> cause code 11, bitfield 11
-            const std::array<uint8_t, 6> interrupt_bits = {0, 3, 4, 7, 8, 11};
+            const std::array<uint8_t, 6> interrupt_bits = {11, 3, 7, 8, 0, 4};
             for (uint64_t bit: interrupt_bits) {
                 if (((this->mip >> bit) & 1ULL) && ((this->mie >> bit) & 1ULL)) {
                     uint64_t cause = (1ULL << 63ULL) | bit;
                     this->write_csr(CSR::mtval, 0);
                     this->write_csr(CSR::mcause, cause);
                     this->exception_handler();
-                    continue;
+                    break;
                 }
             }
         }
