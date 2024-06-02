@@ -56,7 +56,7 @@ void processor::execute(unsigned int num, bool breakpoint_check) {
     breakpoint_check = breakpoint_check && this->has_breakpoint;
     while (num--) {
         // Stop execution early
-        if (this->verbose) std::cout << "Running instruction at 0x" << std::setw(16) << std::setfill('0') << std::hex << this->pc << std::endl;
+        //if (this->verbose) std::cout << "Running instruction at 0x" << std::setw(16) << std::setfill('0') << std::hex << this->pc << std::endl;
         if (breakpoint_check && this->pc == this->breakpoint) {
             std::cout << "Breakpoint reached at " << std::setw(16) << std::setfill('0') << std::hex << this->pc << std::endl;
             break;
@@ -351,6 +351,41 @@ void processor::execute(uint32_t instruction) {
         OP_32    =  0x3b, // 0b0111011  // ADDW, SUBW, SLLW, SRLW, SRAW
     };
 
+    /*
+    auto read_opcode = [](Opcode opcode){
+        switch (opcode) {
+            case Opcode::LUI:
+                return "LUI";
+            case Opcode::AUIPC:
+                return "AUIPC";
+            case Opcode::JAL:
+                return "JAL";
+            case Opcode::JALR:
+                return "JALR";
+            case Opcode::BRANCH:
+                return "BRANCH";
+            case Opcode::LOAD:
+                return "LOAD";
+            case Opcode::STORE:
+                return "STORE";
+            case Opcode::OP_IMM:
+                return "OP_IMM";
+            case Opcode::OP:
+                return "OP";
+            case Opcode::MISC_MEM:
+                return "MISC_MEM";
+            case Opcode::SYSTEM:
+                return "SYSTEM";
+            case Opcode::OP_IMM32:
+                return "OP_IMM32";
+            case Opcode::OP_32:
+                return "OP_32";
+            default:
+                return "UNKNOWN OPCODE";
+        }
+    };
+    */
+
     Opcode opcode = static_cast<Opcode>(static_cast<uint8_t>(instruction & 0x7f));
     uint8_t funct3 = (instruction >> 12) & 0x7;
     uint8_t funct7 = (instruction >> 25) & 0x7f;
@@ -359,6 +394,14 @@ void processor::execute(uint32_t instruction) {
     size_t rs2 = (instruction >> 20) & 0x1f;
     int64_t immediate = 0;
     bool illegal_instruction = false;
+    /*
+    if (this->verbose) {
+        std::cout << read_opcode(opcode) 
+            << " called from PC " << this->pc 
+            << " and instruction count " << this->instruction_count 
+            << std::endl;
+    }
+    */
     switch (opcode) {
         case Opcode::LUI: // LUI
             immediate = upper_immediate(instruction);
@@ -442,6 +485,11 @@ void processor::execute(uint32_t instruction) {
         this->write_csr(CSR::mcause, 2);
         --this->instruction_count;
         this->exception_handler();
+        /*
+        if (this->verbose) {
+            std::cout << "Illegal instruction exception." << std::endl;
+        }
+        */
     }
 }
 
@@ -574,14 +622,25 @@ void processor::update_privilege(bool mret) {
 }
 
 void processor::exception_handler() {
+    /*
+    if (this->verbose) {
+        std::cout << "Exception called, cause = " << this->mcause << std::endl;
+    }
+    */
     // Set privilege to machine mode
     this->update_privilege(false);
     // Store address in mepc
     this->write_csr(CSR::mepc, this->pc);
     uint64_t base = this->mtvec & ~0x3ULL;
-    if (this->mtvec & 1) {
+    if ((this->mtvec & 1) && (this->mcause >> 63ULL)) {
         // Vectored mode
-        uint64_t cause = this->mcause == 3 ? 0 : this->mcause << 2;
+        uint64_t cause = this->mcause << 2;
+        base &= ~0xfULL;
+        /*
+        if (this->verbose) {
+            std::cout << "Vectored mode: " << base << " + " << cause << std::endl;
+        }
+        */
         this->pc = base + cause;
     } else {
         // Direct mode
